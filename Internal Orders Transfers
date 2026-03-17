@@ -1,0 +1,108 @@
+--INTERNAL PO MASTER QUERY
+
+select 	cal.week_begin_date,
+											ii.rec_update_time::date as order_drop_date,
+											i.rec_create_time_la as order_drop_time,
+											i.rec_creator_id as rec_creator_id,  
+											i.id as invoice_id,
+									        ip.product_id as product_id,
+--									        i.sales_org_id,
+											i.inventory_id as origin_inventory_id,
+											i.inventory_title as origin_inventory_title,
+											inv.ref_inventory_id as destination_inventory_id,
+											i.target_inventory_title as destination_inventory_title,
+											i.order_type_title
+									        i.status as invoice_status,
+									        case when i.status like 'A' then 'Created'
+									        	 when i.status like 'C' then 'Printed'
+									        	 when i.status like 'D' then 'Shipped'
+									        	 when i.status like 'M' then 'Delivered'
+									        	 when i.status like 'S' then 'Settled'
+									        	 when i.status like 'X' then 'Deleted'
+									        	 else 'NA'
+									        end as invoice_status_desc,
+									        i.status_title as invoice_status_title,
+									        i.delivery_date as estimated_delivery_date,
+									        iip.received_date as actual_received_date,
+									        c.short_title_en,
+											c.upc_code,
+											c.weee_buyer_id,
+											c.sku_owner,
+											c.division_id,
+											c.division,
+											c.department_num,
+											c.department,
+											c.category_num,
+											c.category,
+											c.sub_category_num,
+											c.sub_category,
+											c.product_ethnicity,
+											c.sku_group_ethnicity,
+--											c.tier,
+											ssi.tier,
+											c.storage_type,
+											c.storage_desc,
+											c.length,
+											c.width,
+											c.height,
+											c.volume,
+											c.weight,
+									        ip.original_quantity,
+									        ii.invoice_id as internal_invoice_id,
+									        iip.product_id as internal_product_id,
+									        iip.receipt_quantity,
+									        ip.original_quantity - nvl(iip.receipt_quantity, 0) as in_transit_qty,
+									        (ip.original_quantity - nvl(iip.receipt_quantity, 0))*c.length*c.width*c.height/115200 as pallet_estimate_in_transit,
+									        (nvl(iip.receipt_quantity, 0))*c.length*c.width*c.height/115200 as pallet_estimate_recieved,
+									        datediff(day, ii.rec_update_time, current_date),
+									        til.putaway_quantity,
+									        til.putaway_date
+									     from dwd.invoice i
+									         left join dwd.wms_invoice_internal ii on i.id = ii.invoice_id
+									         left join dwd.trx_invoice_line ip on ii.invoice_id = ip.invoice_id
+									         left join (   select invoice_id, product_id,date(rec_create_time) as received_date, sum(quantity) as receipt_quantity
+											               from dim.invoice_line_internal
+											               group by 1, 2, 3) iip 
+									               on ii.invoice_id = iip.invoice_id and iip.product_id = ip.product_id
+									         left join dim.calendar as cal on date(ii.rec_update_time::date) = cal.cal_date
+									         left join dim.inventory as inv on inv.inventory_id = ii.target_warehouse_num
+									         left join dwd.mdse_product c on ip.product_id=c.product_id 
+									         left join (select distinct product_id, inventory_id, tier from metrics.sku_so_inv) ssi
+									         			on ssi.product_id =ip.product_id and ssi.inventory_id =inv.ref_inventory_id
+									         left join (select
+														til.invoice_id,
+														sgm.inventory_id,
+														sgm.product_id,
+														sum(sgm.quantity) as putaway_quantity,
+														min(date(convert_timezone(nvl(w.time_zone, 'America/Los_Angeles'), sgm.rec_create_time))) as putaway_date
+														from dwd.trx_invoice_line til
+															left join dwd.wms_invoice_internal wii
+															on til.invoice_id = wii.invoice_id
+															left join dim.warehouse w
+															on wii.target_warehouse_num = w.warehouse_number
+															left join dim.inventory i
+															on wii.target_warehouse_num = i.inventory_id
+															join dwd.sc_goods_movement sgm
+															on til.id = sgm.target_id
+															and i.real_inventory_id = sgm.inventory_id
+															and sgm.target_table = 'gb_invoice_line'
+														--where product_id = 93754
+														where 1=1
+														--and til.invoice_id in (37110346,37110345,37110344,37110343)
+														group by 1, 2, 3) til
+														on til.invoice_id=ip.invoice_id and til.product_id=ip.product_id 
+									      where 1=1 
+				--					      and (i.inventory_id = 38 or i.inventory_id = 25) -- outbound FC filter
+									      and i.order_type = 'I'
+									      -- 31.Weee-Reserve-32 Cold, 32.Weee-Reserve-United cold, 33.Weee-Reserve-FBM, 34.Weee-Reserve-Ready Trucking INC, 35.SF - DC - Volpey
+--									      and i.status in ('A', 'C', 'D') -- A,已创建 Created / C,已打印 Printed / D,已发货 Shipped / M,已到货 Delivered/ S,已结算 Settled/ X,已删除 Deleted
+--									      and i.delivery_date between current_date-10 and current_date-7
+--									      and ii.rec_update_time::date between current_date-7 and current_date-2
+									      and cal.week_begin_date>=current_date-2
+--									      and ip.product_id = 85163
+--									      and i.id in (37592112,37592113,37592114,37592115,37664929,37759420)
+--									      and i.id in (37110343)
+--									      and ip.product_id in ()
+									      and inv.ref_inventory_id=41
+									      and i.inventory_id=16    --dc inventory id
+									      order by invoice_id desc, product_id asc
