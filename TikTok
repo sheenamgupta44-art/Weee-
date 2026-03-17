@@ -1,0 +1,322 @@
+---east coast
+WITH misc AS (
+    SELECT distinct
+        product_id AS "Product ID",
+        short_title_en AS "Sku Name Eng",
+        weee_buyer_id AS "Sku Owner ID",
+         sku_owner AS "Sku Owner Name",
+        product_ethnicity
+    FROM dws.sc_purchase_order_product
+    WHERE product_id IN (
+        SELECT DISTINCT product_id 
+        FROM metrics.order_product 
+        WHERE order_biz_type = 'tiktok'
+--        and product_id= 98583
+    )
+),
+sales AS (
+    SELECT 
+        c.product_id,
+        a.sales_30 AS "NJ NJst 30 day Sales",
+        c.forecasted_units_past_7_days AS "NJ NJst 7 days Forecast",
+        b.sales_7 AS "NJ NJst 7 days Sales",
+        sh.oh_units_clifton AS "Clifton Current OH",
+        she.oh_units_bv AS "BV Current OH",
+        ROUND((sh.oh_units_clifton+she.oh_units_bv) / NULLIF(c.forecasted_units_past_7_days,0),2) AS "WOS NJ"
+    FROM (
+        SELECT product_id, sum(qty_final) AS forecasted_units_past_7_days
+        FROM dwd.df_demand_forecast_daily
+        WHERE sales_org_id IN (16,116) 
+          AND day BETWEEN CURRENT_DATE-8 AND CURRENT_DATE-1 
+          AND product_id IN (
+              SELECT DISTINCT product_id 
+              FROM metrics.order_product WHERE order_biz_type='tiktok'
+          )
+        GROUP BY 1
+    ) c
+    LEFT JOIN (    
+        SELECT product_id, SUM(quantity) AS sales_30
+        FROM metrics.order_product
+        WHERE order_biz_type='tiktok'
+          AND inventory_id IN (33,16,41)
+          AND order_day BETWEEN CURRENT_DATE-30 AND CURRENT_DATE-1 
+        GROUP BY 1
+    ) a ON c.product_id=a.product_id
+    LEFT JOIN (
+        SELECT product_id, SUM(quantity) AS sales_7
+        FROM metrics.order_product
+        WHERE order_biz_type='tiktok'
+          AND inventory_id IN (33,16,41)
+          AND order_day BETWEEN CURRENT_DATE-8 AND CURRENT_DATE-1  
+        GROUP BY 1
+    ) b ON c.product_id=b.product_id
+    LEFT JOIN (
+        SELECT product_id, SUM(quantity) AS oh_units_clifton
+        FROM dws.sc_inv_product_qty_daily
+        WHERE inventory_id IN (33,16)
+          AND create_date= CURRENT_DATE 
+        GROUP BY 1
+    ) sh ON c.product_id=sh.product_id
+    LEFT JOIN (
+        SELECT product_id, SUM(quantity) AS oh_units_bv
+        FROM dws.sc_inv_product_qty_daily
+        WHERE inventory_id IN (41)
+          AND create_date= CURRENT_DATE 
+        GROUP BY 1
+    ) she ON c.product_id=she.product_id
+),
+po AS (
+    WITH base AS (
+        SELECT 
+            a.product_id,
+            a.purchase_order_id,
+          COALESCE(purchase_product_quantity+purchase_gift_quantity,0) * 1.0 * quantity_per_unit AS final_po_qty,
+                   COALESCE(original_quantity+original_gift_quantity,0) * 1.0 * quantity_per_unit AS original_po_qty, 
+       
+           COALESCE(receipt_quantity,0) AS received_po_qty, 
+          a.est_delivery_date AS po_eta,
+            a.po_status_desc,
+            a.putaway_quantity
+,            
+               b.submitted_quantity as pr_qty,
+        c.target_quantity as target_qty,
+c.avg_til_weeks_of_supply as wos,
+            ROW_NUMBER() OVER (
+                PARTITION BY a.product_id 
+                ORDER BY a.est_delivery_date ASC, a.purchase_order_id DESC
+            ) rn
+FROM dws.sc_purchase_order_product 
+a 
+left join  ( select sh.*, case when facility_id = 33 then 16 when facility_id = 37 then 7 else facility_id
+end as inventory_id
+from
+dwd.irs_network_purchase_order_product  sh 
+
+
+) b 
+on a.product_id = b.product_id and a.inventory_id = b.inventory_id
+and b.order_date = a.po_issue_date
+left join (
+select she.*, case when facility_id = 33 then 16 when facility_id = 37 then 7 else facility_id
+end as inventory_id
+from
+  dwd.irs_network_product_calculation 
+ 
+  she 
+  )c 
+  on a.product_id = c.product_id and a.inventory_id = c.inventory_id
+and c.snapshot_date = a.po_issue_date
+        WHERE a.po_status_desc NOT IN ('Delivered','Settled')
+          AND a.est_delivery_date >= CURRENT_DATE-14
+          AND a.inventory_id IN (33,16,41)
+          AND a.product_id IN (
+              SELECT DISTINCT product_id FROM metrics.order_product WHERE order_biz_type='tiktok'
+          )
+    )
+    SELECT product_id,
+        MAX(CASE WHEN rn=1 THEN purchase_order_id END) AS "Open PO 1",
+        MAX(CASE WHEN rn=1 THEN final_po_qty END) AS "Open PO 1 Qty",
+         MAX(CASE WHEN rn=1 THEN original_po_qty END) AS "Original Open PO 1 Qty",
+        MAX(CASE WHEN rn=1 THEN po_eta END) AS "Open PO 1 ETA",
+        MAX(CASE WHEN rn=1 THEN po_status_desc END) AS "PO Status 1",
+           MAX(CASE WHEN rn=1 THEN putaway_quantity END) AS "putaway_quantity 1",
+MAX(CASE WHEN rn=1 THEN received_po_qty END) AS "received_po_qty 1",
+MAX(CASE WHEN rn=1 THEN target_qty END) AS "target_qty 1",
+MAX(CASE WHEN rn=1 THEN wos END) AS "wos 1",
+MAX(CASE WHEN rn=1 THEN pr_qty  END) AS "pr_qty 1",
+
+        MAX(CASE WHEN rn=2 THEN purchase_order_id END) AS "Open PO 2",
+        MAX(CASE WHEN rn=2 THEN final_po_qty END) AS "Open PO 2 Qty",
+         MAX(CASE WHEN rn=2 THEN original_po_qty END) AS "Original Open PO 2 Qty",
+        MAX(CASE WHEN rn=2 THEN po_eta END) AS "Open PO 2 ETA",
+        MAX(CASE WHEN rn=2 THEN po_status_desc END) AS "PO Status 2",
+        MAX(CASE WHEN rn=2 THEN received_po_qty END) AS "received_po_qty 2",
+         MAX(CASE WHEN rn=2 THEN putaway_quantity END) AS "putaway_quantity 2",
+MAX(CASE WHEN rn=2 THEN target_qty END) AS "target_qty 2",
+MAX(CASE WHEN rn=2 THEN wos  END) AS "wos 2",
+     MAX(CASE WHEN rn=2 THEN pr_qty END) AS "pr_qty 2",    
+         
+        MAX(CASE WHEN rn=3 THEN purchase_order_id END) AS "Open PO 3",
+        MAX(CASE WHEN rn=3 THEN final_po_qty END) AS "Open PO 3 Qty",
+         MAX(CASE WHEN rn=3 THEN original_po_qty END) AS "Original Open PO 3 Qty",
+        MAX(CASE WHEN rn=3 THEN po_eta END) AS "Open PO 3 ETA",
+        MAX(CASE WHEN rn=3 THEN po_status_desc END) AS "PO Status 3",
+        MAX(CASE WHEN rn=3 THEN received_po_qty END) AS "received_po_qty 3",
+            MAX(CASE WHEN rn=3 THEN putaway_quantity END) AS "putaway_quantity 3",
+            MAX(CASE WHEN rn=3 THEN target_qty END) AS "target_qty 3",
+MAX(CASE WHEN rn=3 THEN wos END) AS "wos 3",
+MAX(CASE WHEN rn=3 THEN pr_qty  END) AS "pr_qty 3",
+
+        MAX(CASE WHEN rn=4 THEN purchase_order_id END) AS "Open PO 4",
+        MAX(CASE WHEN rn=4 THEN final_po_qty END) AS "Open PO 4 Qty",
+         MAX(CASE WHEN rn=4 THEN original_po_qty END) AS "Original Open PO 4 Qty",
+        MAX(CASE WHEN rn=4 THEN po_eta END) AS "Open PO 4 ETA",
+        MAX(CASE WHEN rn=4 THEN po_status_desc END) AS "PO Status 4",
+        MAX(CASE WHEN rn=4 THEN received_po_qty END) AS "received_po_qty 4",
+            MAX(CASE WHEN rn=4 THEN putaway_quantity END) AS "putaway_quantity 4",
+     MAX(CASE WHEN rn=4 THEN target_qty END) AS "target_qty 4",
+MAX(CASE WHEN rn=4 THEN wos END) AS "wos 4",       
+ MAX(CASE WHEN rn=4 THEN pr_qty  END) AS "pr_qty 4",           
+
+        MAX(CASE WHEN rn=5 THEN purchase_order_id END) AS "Open PO 5",
+        MAX(CASE WHEN rn=5 THEN final_po_qty END) AS "Open PO 5 Qty",
+         MAX(CASE WHEN rn=5 THEN original_po_qty END) AS "Original Open PO 5 Qty",
+        MAX(CASE WHEN rn=5 THEN po_eta END) AS "Open PO 5 ETA",
+        MAX(CASE WHEN rn=5 THEN po_status_desc END) AS "PO Status 5",
+        MAX(CASE WHEN rn=5 THEN received_po_qty END) AS "received_po_qty 5",
+            MAX(CASE WHEN rn=5 THEN putaway_quantity END) AS "putaway_quantity 5",
+            MAX(CASE WHEN rn= 5 THEN target_qty END) AS "target_qty 5",
+MAX(CASE WHEN rn=5 THEN wos END) AS "wos 5",
+MAX(CASE WHEN rn=5 THEN pr_qty  END) AS "pr_qty 5"
+    FROM base WHERE rn<=5
+    GROUP BY product_id
+),
+
+
+it AS ( 
+    WITH base AS (
+        SELECT  
+            ip.product_id,
+            i.id AS invoice_id,
+            ip.original_quantity - COALESCE(iip.receipt_quantity,0) AS in_transit_qty,
+            i.delivery_date+1 AS estimated_delivery_date,
+            ROW_NUMBER() OVER (PARTITION BY ip.product_id ORDER BY i.id DESC) rn
+       
+   FROM dwd.invoice i 
+        JOIN dwd.wms_invoice_internal ii ON i.id=ii.invoice_id
+        JOIN dwd.trx_invoice_line ip ON ii.invoice_id=ip.invoice_id
+        LEFT JOIN (
+            SELECT invoice_id, product_id, SUM(quantity) AS receipt_quantity
+            FROM dim.invoice_line_internal
+            GROUP BY 1,2
+        ) iip ON ii.invoice_id=iip.invoice_id AND ip.product_id=iip.product_id
+        JOIN dim.inventory inv ON inv.inventory_id=ii.target_warehouse_num
+--        join dwd.sc_goods_movement sgm
+--															on ip.id = sgm.target_id
+--															and i.real_inventory_id = sgm.inventory_id
+--															and sgm.target_table = 'gb_invoice_line'
+        WHERE i.order_type='I'
+          AND inv.ref_inventory_id=41
+          AND i.inventory_id=16
+          AND i.status IN ('A','C','D')
+          AND ip.product_id IN (
+              SELECT DISTINCT product_id FROM metrics.order_product WHERE order_biz_type='tiktok'
+          )
+    )
+    SELECT product_id,
+        MAX(CASE WHEN rn=1 THEN invoice_id END) AS "Invoice id 1",
+        MAX(CASE WHEN rn=1 THEN in_transit_qty END) AS "Invoice 1 Qty",
+        MAX(CASE WHEN rn=1 THEN estimated_delivery_date END) AS "Invoice 1 eta",
+        -- ,MAX(CASE WHEN rn=1 THEN putaway_quantity END) AS "Invoice putaway 1",
+
+        MAX(CASE WHEN rn=2 THEN invoice_id END) AS "Invoice id 2",
+        MAX(CASE WHEN rn=2 THEN in_transit_qty END) AS "Invoice 2 Qty",
+        MAX(CASE WHEN rn=2 THEN estimated_delivery_date END) AS "Invoice 2 eta",
+        --  ,MAX(CASE WHEN rn=2 THEN putaway_quantity END) AS "Invoice putaway 2",
+
+        MAX(CASE WHEN rn=3 THEN invoice_id END) AS "Invoice id 3",
+        MAX(CASE WHEN rn=3 THEN in_transit_qty END) AS "Invoice 3 Qty",
+        MAX(CASE WHEN rn=3 THEN estimated_delivery_date END) AS "Invoice 3 eta",
+         -- ,MAX(CASE WHEN rn=3 THEN putaway_quantity END) AS "Invoice putaway 3",
+
+        MAX(CASE WHEN rn=4 THEN invoice_id END) AS "Invoice id 4",
+        MAX(CASE WHEN rn=4 THEN in_transit_qty END) AS "Invoice 4 Qty",
+        MAX(CASE WHEN rn=4 THEN estimated_delivery_date END) AS "Invoice 4 eta"
+         -- ,MAX(CASE WHEN rn=4 THEN putaway_quantity END) AS "Invoice putaway 4"
+
+    FROM base WHERE rn<=5
+    GROUP BY product_id
+),
+
+forecast_weeks AS (
+    WITH forecast AS (
+        SELECT 
+           distinct a.product_id,
+           b.week_begin_date,
+            SUM(a.qty_final) AS forecasted_units
+        FROM  dwd.df_demand_forecast_daily a 
+       JOIN dim.calendar b ON b.cal_date=a.day
+        where product_id in (SELECT DISTINCT product_id
+    FROM metrics.order_product
+    WHERE order_biz_type = 'tiktok')  
+         and a.day>=CURRENT_DATE
+          AND b.week_begin_date NOT IN (SELECT week_begin_date FROM dim.calendar WHERE cal_date=CURRENT_DATE)
+          AND a.sales_org_id IN (16,116)
+        GROUP BY 1,2 
+    ),
+    week_map AS (
+        SELECT DISTINCT week_begin_date,
+               ROW_NUMBER() OVER (ORDER BY week_begin_date) AS week_num
+        FROM forecast
+    )
+    SELECT f.product_id,
+        SUM(CASE WHEN wm.week_num=1 THEN f.forecasted_units END) AS "Fcst Week 1",
+        SUM(CASE WHEN wm.week_num=2 THEN f.forecasted_units END) AS "Fcst Week 2",
+        SUM(CASE WHEN wm.week_num=3 THEN f.forecasted_units END) AS "Fcst Week 3",
+        SUM(CASE WHEN wm.week_num=4 THEN f.forecasted_units END) AS "Fcst Week 4",
+        SUM(CASE WHEN wm.week_num=5 THEN f.forecasted_units END) AS "Fcst Week 5"
+    FROM forecast f
+    JOIN week_map wm ON f.week_begin_date=wm.week_begin_date
+    WHERE wm.week_num<=5
+    GROUP BY f.product_id
+),
+
+
+          
+    FR AS (select product_id, CONCAT(coalesce(ROUND((NULLIF(received_quantity_unit,0 )/ NULLIF(original_ordered_quantity_unit,0))* 100, 2),0),'%') AS FR_percent from (
+        SELECT 
+            a.product_id,
+--   a.original_quantity,
+--   a.original_quantity_v1,
+--     a.purchase_order_id,
+--     quantity_per_unit,
+     SUM(COALESCE(receipt_quantity,0) * 1.0) AS received_quantity_unit,
+        SUM(COALESCE(purchase_product_quantity+purchase_gift_quantity,0) * 1.0 * quantity_per_unit) AS original_ordered_quantity_unit
+   FROM dws.sc_purchase_order_product a
+        WHERE a.po_status_desc  IN ('Delivered','Settled')
+          AND a.est_delivery_date between CURRENT_DATE-40 and current_date
+          AND a.inventory_id IN (33,16,41)
+--        and A.PRODUCT_ID =96942
+
+          AND a.product_id IN (
+              SELECT DISTINCT product_id FROM metrics.order_product WHERE order_biz_type='tiktok'
+          ) 
+group by 1) )
+SELECT 
+    m."Product ID",
+    m."Sku Name Eng",
+    m."Sku Owner ID",
+        m."Sku Owner Name",
+    m.product_ethnicity,
+    s."NJ NJst 30 day Sales" as "NJ last 30 days of sales",
+    s."NJ NJst 7 days Forecast" as "NJ next 7 days Forecast",
+    s."NJ NJst 7 days Sales" as "NJ last 7 days Sales"  ,
+    s."BV Current OH",
+     s."Clifton Current OH",
+    s."WOS NJ",
+
+    -- PO columns
+    p."Open PO 1" as "PO No-1", p."Open PO 1 Qty" as "Final Qty No-1",p."Original Open PO 1 Qty" as "Original Qty No-1" , p."Open PO 1 ETA" as "PO 1 ETA", p."PO Status 1" as "PO 1 Status" , p."pr_qty 1",p."received_po_qty 1",p."putaway_quantity 1",p."target_qty 1",p."wos 1",    
+    
+    p."Open PO 2" as "PO No-2", p."Open PO 2 Qty" as "Final Qty No-2",p."Original Open PO 2 Qty" as "Original Qty No-2", p."Open PO 2 ETA" as "PO 2 ETA", p."PO Status 2" as "PO 2 Status" , p."pr_qty 2",p."received_po_qty 2", p."putaway_quantity 2",p."target_qty 2",p."wos 2", 
+    p."Open PO 3" as "PO No-3", p."Open PO 3 Qty" as "Final Qty No-3",p."Original Open PO 3 Qty" as "Original Qty No-3", p."Open PO 3 ETA" as "PO 3 ETA", p."PO Status 3" as "PO 3 Status", p."pr_qty 3",p."received_po_qty 3", p."putaway_quantity 3",p."target_qty 3",p."wos 3", 
+    p."Open PO 4"  as "PO No-4", p."Open PO 4 Qty" as "Final Qty No-4",p."Original Open PO 4 Qty" as "Original Qty No-4", p."Open PO 4 ETA" as "PO 4 ETA", p."PO Status 4"  as "PO 4 Status", p."pr_qty 4",p."received_po_qty 4", p."putaway_quantity 4",p."target_qty 4",p."wos 4", 
+  
+   case when FR_percent is null then '0%' else FR_percent end as FR_percent ,
+
+
+    -- Invoice columns
+    it."Invoice id 1", it."Invoice 1 Qty", it."Invoice 1 eta",
+    it."Invoice id 2", it."Invoice 2 Qty", it."Invoice 2 eta",
+    it."Invoice id 3", it."Invoice 3 Qty", it."Invoice 3 eta",
+
+  
+
+    -- Forecast weeks
+    fw."Fcst Week 1", fw."Fcst Week 2", fw."Fcst Week 3", fw."Fcst Week 4", fw."Fcst Week 5"
+FROM misc m
+LEFT JOIN sales s ON m."Product ID"=s.product_id
+LEFT JOIN po p ON m."Product ID"=p.product_id
+LEFT JOIN it ON m."Product ID"=it.product_id
+LEFT JOIN forecast_weeks fw ON m."Product ID"=fw.product_id
+left join FR on m."Product ID" = fr.product_id
