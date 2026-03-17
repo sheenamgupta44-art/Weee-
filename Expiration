@@ -1,0 +1,35 @@
+select distinct
+a.update_date + 1 as update_date
+, b.ref_inventory_id as virtual_warehouse_id
+, b.ref_inventory_id || ' - ' || c.inventory_title as virtual_warehouse
+, a.warehouse_number || ' - ' || b.inventory_title as physical_warehouse
+, a.product_id :: integer 
+, location_no
+, a.qty as wms_inv_quantity
+, coalesce(nullif(e.avg_cost,0), e.original_cost) as avg_cost
+, a.storage_type
+, a.department
+, a.short_title
+, a.short_title_en
+, a.check_shelf_life
+, a.location_type
+, f.product_ethnicity
+, date(convert_timezone(d.time_zone, timestamp 'epoch' + a.expire_dtm * interval '1 second')) as expiration_date
+, g.tier
+--, nvl(case when ctier.region_feature = 1 then 'West Tier1'
+--	  when ctier.region_feature = 2 then 'East Tier1'
+--	  when ctier.region_feature = 3 then 'West&East Tier1' end, 'No Tier') as Chinese_Tier
+from metrics.inventory_location_historical a
+left join dim.inventory b on b.inventory_id = a.warehouse_number :: integer
+left join dim.inventory c on b.ref_inventory_id = c.inventory_id
+left join dim.warehouse d on d.warehouse_number = a.warehouse_number 
+left join dws.sc_inv_product_qty_daily e on e.create_date = a.update_date + 1 and b.ref_inventory_id = e.inventory_id and a.product_id :: integer = e.product_id
+left join dwd.mdse_product f on f.product_id = a.product_id :: integer
+left join dwd.mdse_product_tier_u_inv g on g.inventory_id = b.ref_inventory_id and g.product_id = a.product_id :: integer
+--left join weee_p01.pi_product_tier ctier
+--on ctier.product_id = a.product_id
+--and ctier.ethnicity = 'chinese'
+--and ctier.tier = 1
+where -- a.warehouse_number:: integer not in (16,30,31,32) and
+ b.ref_inventory_id in (7,8,16,20,25,29,35,38,39)and a.product_id is not null
+and a.update_date >= current_date -180
