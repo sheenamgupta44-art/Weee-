@@ -1,0 +1,228 @@
+--
+--select distinct report_Date from sandbox.excess_hist limit 10
+
+
+select a.* , week_begin_date from 
+(
+with base as 
+(
+select 
+distinct 
+aa.product_id, 
+aa.inventory_id,
+aa.inventory_title,
+aa.short_title_zh,
+aa.short_title_en,
+aa.sku_owner,
+aa.division,
+aa.department,
+aa.category,
+aa.product_ethnicity,
+aa.tier,
+aa.storage_type,
+bb.volume,
+bb.length,
+bb.width,
+bb.height,
+cc.purchase_status_desc,
+cc.assortment_role,
+cc.purchase_method,
+(aa.quantity) as oh_units,
+dd.avg_6wk_sales as avg_6wk_sales,
+ee.weekly_avg_sales,
+ee.weekly_avg_fcst
+from dws.sc_inv_product_qty_daily aa
+left join dwd.mdse_product bb --- volume and dimensions
+on aa.product_id = bb.product_id
+left join 
+(
+select 
+distinct
+product_id,
+case when inventory_id = 33 then 16 --Clifton
+when inventory_id = 37 then 7 ---BA
+else inventory_id 
+end as inventory_id,
+purchase_status_desc,
+assortment_role,
+purchase_method
+from 
+dwd.mdse_product_warehouse
+)cc ---- core flag and purchase method
+on aa.product_id = cc.product_id and aa.inventory_id = cc.inventory_id
+left join 
+(
+select 
+product_id,
+inventory_id,
+sum(quantity) as last_6wk_sales,
+cast(sum(quantity) as numeric(10,2))/6 as avg_6wk_sales
+from 
+metrics.order_product
+where delivery_day >= current_date - {{inc_days}} - 42
+group by 1,2
+) dd ----- last 8 weeks of sales
+on aa.product_id = dd.product_id and aa.inventory_id = dd.inventory_id
+-----dc mapped sales and forecast-----
+left join 
+(
+select 
+distinct 
+product_id,
+dc_inventory_id,
+sum(hist_daily_avg_sales_6wk*7) as weekly_avg_sales, 
+sum(fcst_daily_avg_sales_6wk*7) as weekly_avg_fcst
+from sandbox.dc_dashboard_nk_test1
+where 1=1
+--and product_id=961
+and date=current_date - {{inc_days}}-1
+group by 1,2
+) ee ---- dc mapped sales and forecast
+on aa.product_id = ee.product_id and aa.inventory_id = ee.dc_inventory_id
+where aa.create_date = current_date - {{inc_days}}
+),
+----forecast numbers below----
+sr_inv_mapping AS
+(
+select sales_org_id ,storage_type ,cast(warehouse_number AS INTEGER) as inventory_id from dwd.wms_inv_sales_mapping 
+),
+daily_forecast AS
+(
+SELECT distinct case when df.sales_org_id = 3 and p.storage_type in ('F ', 'R ') then 25
+when df.sales_org_id = 16 and p.storage_type in ('F ', 'R ') then 16
+else m.inventory_id end as inventory_id
+,df.product_id
+,df.sales_org_id
+,cal.week_begin_date AS forecast_week
+,sum(1.0*nvl(df.qty_final,0)) AS total_df_qty 
+from dwd.df_demand_forecast_daily df
+LEFT JOIN dim.calendar cal
+ON cal.cal_date = df.day::date
+LEFT JOIN dwd.mdse_product p
+ON p.product_id = df.product_id
+LEFT JOIN sr_inv_mapping m
+ON m.sales_org_id = df.sales_org_id AND m.storage_type = p.storage_type
+where 1=1 
+and df.day>= (select week_begin_date from dim.calendar where cal_date=current_date - {{inc_days}}+(7)) 
+and df.day<=(select week_begin_date from dim.calendar where cal_date=current_date - {{inc_days}}+(42))
+--and sales_org_id in (1,2,4,7,10,15,23,3,16,24,29,36)
+--and df.product_id in (53078,97227,14934,9926,9450,59345,14649,89704,24240,106499,92262,107088,44619,30505,85619,105583,92305,85616,106501,90409,66991,107321,105766,83266,63927,49004,107344,104019,102566,104018,106240,88845,41587,107345,100898,91562,106353,102916,88674,15243,100900,10349,5625,106041,37273,100899,51249,105114,51265,106231,5562,4852,101796,102913,37270,106048,105018,25206,26741,101708,100645,101438,105665,4498,107076,84781,51248,84783,92301,50395,18065,102896,107320,94776,107074)
+group by 1,2,3,4
+),
+weekly_demand_fcst_runrate as ( --use this in final flat table
+SELECT 
+product_id,
+inventory_id,
+sum(total_df_qty)/(count(distinct forecast_week)*7) as daily_df_qty,
+count(distinct forecast_week) as forecast_week_count,
+--multiple the number of week * no of days in a week to get daily average
+sum(total_df_qty)/(count(distinct forecast_week)) as weekly_df_qty
+FROM daily_forecast
+group by 1,2
+)
+, open_po as (
+	select
+	   aa.purchase_order_id
+	   , aa.product_id
+	   , aa.inventory_id
+	   , aa.po_type
+	   , aa.po_status
+	   , aa.po_status_desc
+	   , aa.original_quantity * aa.quantity_per_unit as original_ordered_quantity
+	   , aa.est_delivery_date
+	   , aa.receipt_quantity
+	   , aa.receipt_date
+	   , aa.putaway_quantity
+	   , aa.putaway_date
+	   , aa.item_receipt_date
+	    , case
+		    when po_status in ('P') and receipt_date is null then (original_quantity + original_gift_quantity) * quantity_per_unit
+	    	end as pending_po_qty
+	   , case
+	         when receipt_date is null and po_status not in ('P') then (original_quantity + original_gift_quantity) * quantity_per_unit
+	         when receipt_date is not null then receipt_quantity - nvl(putaway_quantity, 0)
+	         when po_status in ('D', 'E', 'R', 'S') then receipt_quantity - nvl(putaway_quantity, 0)
+	      end as open_po_qty
+   from dws.sc_purchase_order_product aa
+   where 1=1
+	   and po_status in ('D','E','R','S','A','C','P')
+	   and aa.inventory_id not in (38,39,40)
+	   and est_delivery_date >= current_date - {{inc_days}} - 10
+)
+, open_po1 as (
+	select
+		inventory_id
+		, product_id
+		, purchase_order_id
+		, est_delivery_date
+		, sum(open_po_qty) as open_po_qty
+		, sum(pending_po_qty) as pending_po_qty
+	from open_po
+	where 1=1
+	and open_po_qty > 0 or pending_po_qty > 0
+	group by 1,2,3,4
+)
+
+select current_date - {{inc_days}} as report_Date ,she.*,  (excess_units *length*width*height)/115200 as  excess_pallets,
+  (open_PO_nxt_wks *length*	width*	height)/115200 as  open_po_pallets
+  from
+(select 
+sh.*,
+coalesce( avg_forecast_weekly , avg_6wk_sales) as  forecast_sales_combo_rr ,
+coalesce( target_quantity, 4.5* avg_forecast_weekly ) as  Target_consolidated ,
+ coalesce (target_quantity / irs_target_wos,0) as  IRS_Forecast_RR ,
+ case when product_id >= 150000 then 1 else 0 end as  fbw_mp_skus ,
+ case when  target_quantity is null then 1 else 0 end as  no_target ,
+  case when oh_units- Target_consolidated <0 then 0 else  oh_units- Target_consolidated end as  excess_units, 
+  case when oh_units- Target_consolidated >0 then 1 else 0 end as is_excess
+  
+from 
+
+
+(select 
+a.*,
+b.weekly_df_qty,
+b.daily_df_qty,
+b.forecast_week_count,
+c.avg_til_weeks_of_supply as irs_target_wos,
+c.target_quantity,
+case when a.purchase_method = 'L' then b.weekly_df_qty else a.weekly_avg_fcst end as avg_forecast_weekly,
+case when a.purchase_method = 'L' then a.avg_6wk_sales else a.weekly_avg_sales end as avg_weekly_sales,
+ case when a.product_id in(
+         8906,103314,6391,71188,100729,43341,35920,76047,105978,107088,79570,100642,105729,97978,92186,24626,92184,105942,105750,170,96193,776,108202,83230,107006 
+          ) then 'Tik-Tok SKU' else 'NA' end as TikTok ,
+    d.promo,      
+    o.open_po_qty as  open_PO_nxt_wks 
+
+          
+from base a
+left join weekly_demand_fcst_runrate b -----forecast numbers
+on a.product_id = b.product_id and a.inventory_id = b.inventory_id
+---IRS target inventory below------
+left join 
+(
+select 
+product_id,
+case when facility_id = 33 then 16 --- NJ
+when facility_id = 37 then 7 ---BA
+else facility_id
+end as facility_id,
+avg_til_weeks_of_supply,
+target_quantity from dwd.irs_network_product_calculation inpc
+where snapshot_date = current_date - {{inc_days}} -1
+) c on a.product_id = c.product_id and a.inventory_id = c.facility_id
+ left join (select distinct product_id, inventory_id, 'crazy 8' as promo from  sandbox.crazy_open) as  d on d.product_id =  a.product_id
+    and d.inventory_id= a.inventory_id
+    
+    left join (select inventory_id
+		, product_id
+		,open_po_qty,pending_po_qty from open_po1 where est_delivery_date >= current_date - {{inc_days}}-7 and est_delivery_date <= current_date - {{inc_days}}-21 
+		
+		) as  o
+		on o.product_id=a.product_id and o.inventory_id =a.inventory_id
+where --1=1
+--and a.purchase_method = 'L'
+ a.division not in ('Produce','Packaging Material')) as sh) as she ) as a
+ join  dim.calendar c  on cast(a.report_date as date) = c.cal_date 
+--and a.inventory_id = 7
+--and a.inventory_id = 41
