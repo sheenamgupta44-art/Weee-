@@ -1,0 +1,1435 @@
+WITH
+-- gives SKU Scope
+sku_pool_t AS (
+  SELECT
+     ps.product_id
+   , p.storage_type
+   , p.product_status AS general_product_status
+   , p.short_title_en
+   , p.short_title_zh
+   , p.department_num || ' - ' || p.department AS department
+   , p.category_num   || ' - ' || p.category   AS category
+   , p.sub_category_num || ' - ' || p.sub_category AS sub_category
+   , p.product_ethnicity
+   , p.is_imported
+   , NVL(p.product_active_time, p.rec_create_time) AS product_active_time
+  FROM dwd.mdse_product_sales ps
+  LEFT JOIN dwd.mdse_product p
+    ON p.product_id = ps.product_id
+  LEFT JOIN dwd.mdse_product_repack pr
+    ON pr.source_product_id = ps.product_id
+   AND pr.status = 'A'
+  WHERE p.department_num NOT IN ('18','50','51','99')
+    AND p.product_status = 'A'
+    AND pr.source_product_id IS NULL
+    AND biz_type='1p'
+  GROUP BY 1,2,3,4,5,6,7,8,9,10,11
+),
+
+-- cross products SKU scope to snapshot dates
+sku_pool AS (
+  SELECT
+      c.cal_date AS day
+    , CASE WHEN op.inventory_id=7 THEN 37
+           WHEN op.inventory_id=16 THEN 33
+           ELSE op.inventory_id END AS inventory_id
+    , op.inventory_title
+    , sp.product_id
+    , sp.storage_type
+    , short_title_en
+    , short_title_zh
+    , department
+    , category
+    , sub_category
+    , sp.general_product_status
+    , sp.product_ethnicity
+    , op.core_sku_flag
+    , sp.is_imported
+    , primary_vendor_id
+    , primary_vendor_title
+    , purchase_method
+    , dc_sku_flag
+  FROM sku_pool_t sp
+  LEFT JOIN dim.calendar c
+    ON c.week_begin_date BETWEEN DATEADD('week',-52,current_date)::date AND current_date
+  LEFT JOIN (
+      SELECT product_id, inventory_id, inventory_title, core_sku_flag,
+             primary_vendor_id, primary_vendor_title, purchase_method, dc_sku_flag
+      FROM dwd.mdse_product_warehouse
+  ) op
+    ON sp.product_id = op.product_id
+  WHERE NVL(c.cal_date, sp.product_active_time::date) >= sp.product_active_time::date
+    AND inventory_id IS NOT NULL
+),
+
+-- gets inventory qty by snapshot date
+invt AS (
+  SELECT
+      p.day AS create_date
+    , CASE
+        WHEN p.inventory_id IN (101,102,103,104,105,106) THEN 25
+        WHEN p.inventory_id IN (107,108) THEN 33
+        ELSE p.inventory_id
+      END AS inventory_id
+    , p.inventory_title
+    , p.product_id
+    , p.storage_type
+    , p.core_sku_flag
+    , p.is_imported
+    , p.primary_vendor_id
+    , p.primary_vendor_title
+    , purchase_method
+    , dc_sku_flag
+    , GREATEST(quantity, qty, 0) AS inventory_qty
+    , GREATEST(quantity, qty, 0) * COALESCE(NULLIF(ct.avg_cost,0), ct.original_cost) AS inventory_cogs
+  FROM sku_pool p
+  LEFT JOIN (
+     SELECT record_date, CAST(warehouse_number AS INT) AS inv_id, product_id,
+            dwd.sc_inventory_version.available_qty AS qty
+     FROM dwd.sc_inventory_version
+     WHERE record_date > current_date- {{inc_days}}
+       AND dwd.sc_inventory_version.warehouse_number IN ('103','14','101','35','107','39','108','102','106','33','20','8','41','105','37','29','25','40','104')
+  ) si
+    ON si.product_id = p.product_id
+   AND si.inv_id = p.inventory_id
+   AND si.record_date = p.day
+  LEFT JOIN dws.sc_inv_product_qty_daily ct
+    ON ct.product_id = p.product_id
+   AND (CASE WHEN ct.inventory_id=7 THEN 37 WHEN ct.inventory_id=16 THEN 33 ELSE ct.inventory_id END) = p.inventory_id
+   AND ct.create_date = p.day
+),
+
+inv AS (
+  SELECT
+     invt.create_date
+   , invt.inventory_id
+   , CASE
+       WHEN invt.inventory_id = 25 THEN 'LA - La Mirada'
+       WHEN invt.inventory_id = 33 THEN 'NJ - Clifton'
+       ELSE MAX(invt.inventory_title)
+     END AS inventory_title
+   , invt.product_id
+   , MAX(invt.core_sku_flag) AS core_sku_flag
+   , invt.is_imported
+   , MAX(CASE WHEN invt.primary_vendor_id    IS NOT NULL THEN invt.primary_vendor_id    END) AS primary_vendor_id
+   , MAX(CASE WHEN invt.primary_vendor_title IS NOT NULL THEN invt.primary_vendor_title END) AS primary_vendor_title
+   , p.short_title_zh
+   , p.short_title_en
+   , p.sku_owner
+   , p.division
+   , p.department
+   , p.category
+   , p.sub_category
+   , p.product_ethnicity
+   , p.storage_type
+   , p.department_num
+   , p.category_num
+   , MIN(p.tier) AS tier
+   , MAX(purchase_method) AS purchase_method
+   , MAX(dc_sku_flag)     AS dc_sku_flag
+   , SUM(inventory_qty)   AS inventory_qty
+   , SUM(inventory_cogs)  AS inventory_cogs
+   , SUM(inventory_qty) * p.volume AS inventory_volume
+  FROM invt
+  LEFT JOIN dwd.mdse_product p USING(product_id)
+  WHERE p.biz_type = '1p'
+  GROUP BY
+    invt.create_date, invt.inventory_id, invt.product_id, invt.is_imported,
+    p.short_title_zh, p.short_title_en, p.sku_owner, p.volume, p.division,
+    p.department, p.category, p.sub_category, p.product_ethnicity, p.storage_type,
+    p.department_num, p.category_num
+),
+
+op1 AS (
+  SELECT inventory_id, inventory_title, product_id
+  FROM metrics.order_product op
+  WHERE delivery_day >= current_date- ({{inc_days}} + 42)
+    AND payment_mode = 'F'
+    AND order_biz_type IN('alcohol','grocery','MG','temu','tiktok')
+  GROUP BY 1,2,3
+),
+
+t AS (
+  SELECT
+      c.cal_date AS delivery_day
+    , op1.inventory_id
+    , op1.inventory_title
+    , op1.product_id
+    , SUM(op.quantity) AS qty_delivered
+    , SUM(COALESCE(op.avg_price, op.original_price) * op.quantity) AS cogs_delivered
+    , SUM(op.quantity * mp3.volume) AS volume_delivered
+  FROM dim.calendar c
+  CROSS JOIN op1
+  LEFT JOIN metrics.order_product op
+    ON c.cal_date = op.delivery_day
+   AND op1.inventory_id = op.inventory_id
+   AND op1.product_id   = op.product_id
+   AND op.payment_mode  = 'F'
+   AND op.order_biz_type IN('alcohol','grocery','MG','temu','tiktok')
+  LEFT JOIN dwd.mdse_product mp3
+    ON mp3.product_id = op1.product_id
+  WHERE cal_date BETWEEN current_date- ({{inc_days}} + 42) AND current_date
+  GROUP BY 1,2,3,4
+),
+
+h AS (
+  SELECT
+      delivery_day
+    , inventory_id
+    , inventory_title
+    , product_id
+    , COALESCE(AVG(qty_delivered::float)  OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 42 PRECEDING AND 1 PRECEDING), 0) AS average_quantity
+    , COALESCE(AVG(cogs_delivered::float) OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 42 PRECEDING AND 1 PRECEDING), 0) AS average_cogs
+    , COALESCE(AVG(volume_delivered::float)OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 42 PRECEDING AND 1 PRECEDING), 0) AS average_volume
+    , COALESCE(AVG(qty_delivered::float)  OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 41 PRECEDING AND CURRENT ROW), 0) AS average_quantity_n
+    , COALESCE(AVG(cogs_delivered::float) OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 41 PRECEDING AND CURRENT ROW), 0) AS average_cogs_n
+    , COALESCE(AVG(volume_delivered::float)OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 41 PRECEDING AND CURRENT ROW), 0) AS average_volume_n
+    , COALESCE(AVG(qty_delivered::float)  OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 7 PRECEDING  AND 1 PRECEDING), 0) AS average_quantity_7d
+    , COALESCE(AVG(cogs_delivered::float) OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 7 PRECEDING  AND 1 PRECEDING), 0) AS average_cogs_7d
+    , COALESCE(AVG(volume_delivered::float)OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 7 PRECEDING  AND 1 PRECEDING), 0) AS average_volume_7d
+    , COALESCE(AVG(qty_delivered::float)  OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 6 PRECEDING  AND CURRENT ROW), 0) AS average_quantity_7d_n
+    , COALESCE(AVG(cogs_delivered::float) OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 6 PRECEDING  AND CURRENT ROW), 0) AS average_cogs_7d_n
+    , COALESCE(AVG(volume_delivered::float)OVER (PARTITION BY inventory_id, product_id ORDER BY delivery_day ASC ROWS BETWEEN 6 PRECEDING  AND CURRENT ROW), 0) AS average_volume_7d_n
+  FROM t
+  WHERE qty_delivered IS NOT NULL
+    AND delivery_day > current_date- ({{inc_days}} + 42)
+),
+
+n AS (
+  SELECT delivery_day, inventory_id, inventory_title, product_id
+  FROM t
+  WHERE qty_delivered IS NULL
+    AND delivery_day > current_date- ({{inc_days}} + 42)
+),
+
+nn AS (
+  SELECT
+      n.*
+    , h.average_quantity_n  AS ave_qty
+    , h.average_cogs_n      AS ave_cogs
+    , h.average_volume_n    AS ave_volume
+    , h.average_quantity_7d_n AS ave_qty_7d
+    , h.average_cogs_7d_n     AS ave_cogs_7d
+    , h.average_volume_7d_n   AS ave_volume_7d
+    , ROW_NUMBER() OVER (PARTITION BY n.delivery_day, n.inventory_id, n.product_id
+                         ORDER BY COALESCE(h.delivery_day, current_date- ({{inc_days}} + 42)) DESC) AS rk
+  FROM n
+  LEFT JOIN h
+    ON n.delivery_day > h.delivery_day
+   AND n.inventory_id = h.inventory_id
+   AND n.product_id   = h.product_id
+),
+
+op AS (
+  SELECT delivery_day,
+         CASE WHEN inventory_id=7 THEN 37 WHEN inventory_id=16 THEN 33 ELSE inventory_id END AS inventory_id,
+         inventory_title, product_id,
+         average_quantity, average_cogs, average_volume,
+         average_quantity_7d, average_cogs_7d, average_volume_7d
+  FROM h
+  UNION ALL
+  SELECT delivery_day,
+         CASE WHEN inventory_id=7 THEN 37 WHEN inventory_id=16 THEN 33 ELSE inventory_id END AS inventory_id,
+         inventory_title, product_id,
+         ave_qty, ave_cogs, ave_volume,
+         ave_qty_7d, ave_cogs_7d, ave_volume_7d
+  FROM nn
+  WHERE rk = 1
+),
+
+sales AS (
+  SELECT
+      op.delivery_day
+    , op.inventory_id
+    , op.inventory_title
+    , op.product_id
+    , mp.storage_type
+    , ROUND(average_quantity,2)   AS average_quantity
+    , ROUND(average_cogs,2)       AS average_cogs
+    , ROUND(average_volume,2)     AS average_volume
+    , ROUND(average_quantity_7d,2) AS average_quantity_7d
+    , ROUND(average_cogs_7d,2)     AS average_cogs_7d
+    , ROUND(average_volume_7d,2)   AS average_volume_7d
+  FROM op
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = op.product_id
+  ORDER BY 1
+),
+
+nsku AS (
+  SELECT
+      CASE WHEN a.inventory_id=7 THEN 37 WHEN a.inventory_id=16 THEN 33 ELSE a.inventory_id END AS inventory_id
+    , COALESCE(c.target_product_id, a.product_id) AS product_id
+    , MIN(CONVERT_TIMEZONE('UTC', b.time_zone, a.rec_create_time))::date AS first_movement_day
+  FROM dwd.sc_goods_movement a
+  LEFT JOIN dwd.mdse_product_repack c
+    ON c.source_product_id = a.product_id
+   AND c.status = 'A'
+  LEFT JOIN dim.warehouse b
+    ON (CASE WHEN a.inventory_id=7 THEN 37 WHEN a.inventory_id=16 THEN 33 ELSE a.inventory_id END) = b.warehouse_number::integer
+  WHERE a.inventory_id IN (7,8,16,20,25,29,35,38,40,41)
+    AND a.rec_create_time > current_date- ({{inc_days}} + 30)
+  GROUP BY 1,2
+),
+
+daily_forecast1 AS (
+  SELECT day, m.warehouse_number AS inventory_id, df.product_id, SUM(qty_final) AS daily_df_qty
+  FROM dwd.df_demand_forecast_daily df
+  LEFT JOIN dwd.mdse_product p ON p.product_id = df.product_id
+  LEFT JOIN dwd.wms_inv_sales_mapping m
+    ON df.sales_org_id = m.sales_org_id AND p.storage_type = m.storage_type
+  WHERE day > current_date- ({{inc_days}} + 42)  AND day < current_date + 180
+  GROUP BY 1,2,3
+),
+
+daily_forecast_d AS (
+  SELECT
+      day
+    , CASE WHEN inventory_id='7' THEN '37' WHEN inventory_id='16' THEN '33' ELSE inventory_id END AS inventory_id
+    , product_id
+    , daily_df_qty
+    , 1.0*AVG(daily_df_qty::float IGNORE NULLS) OVER (PARTITION BY inventory_id, product_id ORDER BY day DESC ROWS BETWEEN 42 PRECEDING AND 1 PRECEDING)::float AS unit_6w_d_ma
+    , 1.0*AVG(daily_df_qty::float IGNORE NULLS) OVER (PARTITION BY inventory_id, product_id ORDER BY day DESC ROWS BETWEEN 41 PRECEDING AND CURRENT ROW)::float AS unit_6w_d_ma_t
+  FROM daily_forecast1
+),
+
+loc AS (
+  SELECT
+      a.update_date + 1 AS update_date
+    , warehouse_number
+    , a.product_id::integer
+    , COUNT(DISTINCT CASE WHEN a.location_type = 'Bin'   THEN a.location_no END) AS Bin_cnt
+    , COUNT(DISTINCT CASE WHEN a.location_type = 'Stock' THEN a.location_no END) AS Stock_cnt
+    , COUNT(DISTINCT CASE WHEN a.location_type = 'Bin'   AND a.qty > 0 THEN a.location_no END) AS Bin_cnt_with_inv
+    , COUNT(DISTINCT CASE WHEN a.location_type = 'Stock' AND a.qty > 0 THEN a.location_no END) AS Stock_cnt_with_inv
+  FROM metrics.inventory_location_historical a
+  WHERE a.product_id IS NOT NULL
+    AND warehouse_number IN (8,14,20,25,29,33,35,37,39,40,41)
+  GROUP BY 1,2,3
+),
+
+sss AS (
+  SELECT inventory_id, product_id, mpw.purchase_status_desc AS sales_status
+  FROM dwd.mdse_product_warehouse mpw
+  WHERE inventory_id IN (8,14,20,25,29,33,35,37,39,40,41)
+),
+
+date_scope AS (
+  SELECT cal_date AS snapshot_date
+  FROM dim.calendar
+  WHERE cal_date BETWEEN current_date- ({{inc_days}} + 42) AND current_date
+  ORDER BY 1 DESC
+),
+
+cogs AS (
+  SELECT
+      (DATE_TRUNC('week', op.order_day)-1)::date AS order_week
+    , op.order_day
+    , CASE WHEN op.inventory_id=7 THEN 37 WHEN op.inventory_id=16 THEN 33 ELSE op.inventory_id END AS inventory_id
+    , op.product_id
+    , SUM(op.gm_cost)    AS cogs
+    , SUM(op.gm_base)    AS revenue
+    , SUM(op.quantity)   AS quantity
+    , SUM(op.gm_cost) / NULLIF(SUM(op.quantity),0) AS auc
+    , SUM(op.sub_total) / NULLIF(SUM(op.quantity),0) AS aur
+  FROM metrics.order_product op
+  WHERE op.order_day >= current_date- ({{inc_days}} + 84)
+    AND op.order_biz_type IN ('alcohol','grocery','MG','temu','tiktok')
+  GROUP BY 1,2,3,4
+),
+
+rolling_6wk_cogs_by_snapshot AS (
+  SELECT
+      ds.snapshot_date
+    , c.inventory_id
+    , c.product_id
+    , SUM(c.cogs)     AS sum_6wk_cogs
+    , SUM(c.revenue)  AS sum_6wk_revenue
+    , SUM(c.quantity) AS sum_6wk_quantity
+    , CASE WHEN SUM(c.quantity) > 0 THEN SUM(c.cogs) / SUM(c.quantity) ELSE 0 END AS avg_6wk_auc
+  FROM cogs c
+  JOIN date_scope ds
+    ON c.order_day BETWEEN ds.snapshot_date - INTERVAL '6 weeks' AND ds.snapshot_date
+  GROUP BY 1,2,3
+),
+
+avg_inv AS (
+  SELECT
+      i1.product_id
+    , CASE WHEN i1.inventory_id=7 THEN 37 WHEN i1.inventory_id=16 THEN 33 ELSE i1.inventory_id END AS inventory_id
+    , cal.week_begin_date AS week_begin_date
+    , i2.create_date     AS week_end_date
+    , SUM(i1.quantity)   AS beg_inv
+    , SUM(i2.quantity)   AS end_inv
+  FROM dwd.sc_inv_product_qty_daily i1
+  JOIN (
+    SELECT DISTINCT week_begin_date, week_end_date
+    FROM dim.calendar
+    WHERE cal_date > current_date- ({{inc_days}} + 84) AND cal_date < current_date
+  ) cal ON cal.week_begin_date = i1.create_date
+  JOIN dwd.sc_inv_product_qty_daily i2
+    ON i1.product_id  = i2.product_id
+   AND i1.inventory_id= i2.inventory_id
+   AND cal.week_end_date = i2.create_date
+  GROUP BY 1,2,3,4
+),
+
+avg_6wks_inv_by_snapshot AS (
+  SELECT
+      ds.snapshot_date
+    , ai.inventory_id
+    , ai.product_id
+    , AVG(ai.beg_inv) AS avg_beg_inv
+    , AVG(ai.end_inv) AS avg_end_inv
+  FROM avg_inv ai
+  JOIN date_scope ds
+    ON ai.week_begin_date BETWEEN ds.snapshot_date - INTERVAL '6 weeks' AND ds.snapshot_date
+  GROUP BY 1,2,3
+),
+
+daily_snapshot_turns AS (
+  SELECT DISTINCT
+      c.snapshot_date
+    , CASE WHEN c.inventory_id=7 THEN 37 WHEN c.inventory_id=16 THEN 33 ELSE c.inventory_id END AS inventory_id
+    , c.product_id
+    , c.sum_6wk_cogs/6 AS avg_wkly_cogs
+    , a.avg_beg_inv    AS avg_wkly_beg_inv
+    , a.avg_end_inv    AS avg_wkly_end_inv
+    , (a.avg_beg_inv + a.avg_end_inv)/2 AS avg_wkly_inv
+    , c.avg_6wk_auc
+    , ( (a.avg_beg_inv + a.avg_end_inv)/2 ) * c.avg_6wk_auc AS avg_inv_cost
+  FROM rolling_6wk_cogs_by_snapshot c
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = c.product_id
+  JOIN avg_6wks_inv_by_snapshot a
+    ON c.snapshot_date = a.snapshot_date
+   AND c.inventory_id  = a.inventory_id
+   AND c.product_id    = a.product_id
+  WHERE mp.division != 'Produce'
+),
+d AS (
+  SELECT
+      record_date,
+      CASE 
+        WHEN CAST(warehouse_number AS INT) = 7  THEN 37
+        WHEN CAST(warehouse_number AS INT) = 16 THEN 33
+        ELSE CAST(warehouse_number AS INT)
+      END AS inventory_id,
+      product_id,
+      available_qty
+  FROM dwd.sc_inventory_version
+  WHERE record_date BETWEEN current_date -  {{inc_days}} AND current_date
+),
+
+fc_dashboard_sc_ru AS (
+  SELECT
+      inv.create_date
+    , inv.inventory_id
+    , inv.inventory_title
+    , inv.product_id
+    , inv.short_title_zh
+    , inv.short_title_en
+    , inv.sku_owner
+    , inv.division
+    , inv.core_sku_flag
+    , inv.department
+    , inv.category
+    , inv.sub_category
+    , inv.product_ethnicity
+    , inv.storage_type
+    , inv.department_num
+    , inv.category_num
+    , inv.inventory_qty       AS inventory_qty
+    , inv.inventory_cogs      AS inventory_cogs
+    , inv.inventory_volume    AS inventory_volume
+    , inv.tier
+    , inv.purchase_method
+    , dc_sku_flag             AS dc_flag
+    , CASE WHEN purchase_method= 'B' THEN 'Y' ELSE 'N' END AS bulkbuy_flag
+    , inv.is_imported
+    , sales.average_quantity
+    , sales.average_cogs
+    , sales.average_volume
+    , sales.average_quantity_7d
+    , sales.average_cogs_7d
+    , sales.average_volume_7d AS average_volume_7d
+    , inv.primary_vendor_id
+    , inv.primary_vendor_title
+    , CASE WHEN nsku.product_id IS NULL THEN 'old' ELSE 'new' END AS new_sku_tag
+    , CASE
+        WHEN dfd.daily_df_qty IS NOT NULL THEN dfd.unit_6w_d_ma
+        ELSE LAST_VALUE(dfd.unit_6w_d_ma_t::float IGNORE NULLS)
+             OVER (PARTITION BY inv.inventory_id, inv.product_id ORDER BY inv.create_date ROWS UNBOUNDED PRECEDING)
+      END AS unit_6w_ma_dp_fcst
+    , loc.Bin_cnt
+    , loc.Stock_cnt
+    , loc.Bin_cnt_with_inv
+    , loc.Stock_cnt_with_inv
+    , sss.sales_status
+    , NVL(d.available_qty,0) AS available_qty
+    , dst.avg_wkly_cogs      AS turn_avg_wkly_cogs
+    , dst.avg_inv_cost       AS turn_avg_inv_cost
+    , CASE WHEN inv.inventory_qty>0 THEN 1 ELSE 0 END AS instock_snapshot_availability
+  FROM inv
+  LEFT JOIN sales
+    ON inv.create_date = sales.delivery_day
+   AND inv.inventory_id = sales.inventory_id
+   AND inv.product_id   = sales.product_id
+  LEFT JOIN nsku
+    ON nsku.inventory_id = inv.inventory_id
+   AND nsku.product_id   = inv.product_id
+   AND nsku.first_movement_day BETWEEN inv.create_date - 21 AND inv.create_date
+  LEFT JOIN daily_forecast_d dfd
+    ON dfd.day = inv.create_date
+   AND dfd.inventory_id = inv.inventory_id
+   AND dfd.product_id   = inv.product_id
+  LEFT JOIN loc
+    ON inv.create_date = loc.update_date
+   AND inv.inventory_id = loc.warehouse_number
+   AND inv.product_id   = loc.product_id
+  LEFT JOIN sss
+    ON inv.inventory_id = sss.inventory_id
+   AND inv.product_id   = sss.product_id
+  LEFT JOIN sandbox.d d
+    ON d.product_id  = inv.product_id
+   AND d.inventory_id= inv.inventory_id
+   AND d.record_date = inv.create_date
+  LEFT JOIN daily_snapshot_turns dst
+    ON dst.snapshot_date = inv.create_date
+   AND dst.inventory_id  = inv.inventory_id
+   AND dst.product_id    = inv.product_id
+  WHERE inv.inventory_id NOT IN (14,39)
+    AND department_num NOT IN (01,02)
+),
+
+fc_datasource AS (
+  SELECT
+    ru.*,
+    CASE
+      WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40)
+        THEN zhe.total_hist_sales_avg
+      WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37)
+        THEN zhe.total_hist_sales_avg
+      ELSE ru.average_quantity
+    END AS average_quantity_mapped,
+    CASE
+      WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40)
+        THEN zhe.total_hist_sales
+      WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37)
+        THEN zhe.total_hist_sales
+      ELSE ru.average_quantity_7d
+    END AS average_quantity_7d_mapped,
+    CASE
+      WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40)
+        THEN zhe.total_frcst
+      WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37)
+        THEN zhe.total_frcst
+      ELSE ru.unit_6w_ma_dp_fcst
+    END AS unit_6w_ma_dp_fcst_mapped,
+    CASE
+      WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40)
+        THEN (zhe.t_fc_sum_6wk_cogs/42)
+      WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37)
+        THEN (zhe.t_fc_sum_6wk_cogs/42)
+      ELSE ru.average_cogs
+    END AS average_cogs_mapped,
+    CASE
+      WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40)
+        THEN (zhe.t_fc_avg_wkly_cogs/7)
+      WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37)
+        THEN (zhe.t_fc_avg_wkly_cogs/7)
+      ELSE ru.average_cogs_7d
+    END AS average_cogs_7d_mapped,
+    CASE
+      WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40)
+        THEN (zhe.total_hist_sales_avg * p.volume)
+      WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37)
+        THEN (zhe.total_hist_sales_avg * p.volume)
+      ELSE ru.average_volume
+    END AS average_volume_mapped,
+    CASE
+      WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40)
+        THEN (zhe.total_hist_sales_avg * p.volume)
+      WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37)
+        THEN (zhe.total_hist_sales_avg * p.volume)
+      ELSE ru.average_volume_7d
+    END AS average_volume_7d_mapped,
+    COALESCE(GREATEST(
+        CASE
+          WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40) THEN zhe.total_hist_sales_avg
+          WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37) THEN zhe.total_hist_sales_avg
+          ELSE ru.average_quantity
+        END,
+        CASE
+          WHEN (purchase_method IN ('D','B','I')) AND zhe.dc_inventory_id IN (33,40) THEN zhe.total_frcst
+          WHEN (purchase_method IN ('B','I'))     AND zhe.dc_inventory_id IN (25,37) THEN zhe.total_frcst
+          ELSE ru.unit_6w_ma_dp_fcst
+        END
+    ), 0) AS weights
+  FROM fc_dashboard_sc_ru ru
+  LEFT JOIN (
+  WITH
+-- (1) sc_dc_sku_east_west_nk 构建 DC-FC SKU 映射
+fc_sku_scope_west AS (
+  SELECT DISTINCT mpw.inventory_id AS fc_inventory_id, mpw.product_id, mp.storage_type, mp.is_imported, mc.value AS dc_flag
+  FROM dwd.mdse_product_warehouse mpw
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = mpw.product_id
+  LEFT JOIN dim.meta_code mc ON mc.key = mpw.purchase_method
+  WHERE mpw.inventory_id IN (8,25,20,37)
+    AND mpw.purchase_status_desc LIKE 'Live%'
+    AND mpw.purchase_method IN ('D','B','I')
+    AND mc.type_id = 134
+),
+dc_fc_mapping_west AS (
+  SELECT DISTINCT mpw.inventory_id AS dc_inventory_id, mpw.product_id, mp.storage_type, mp.is_imported, mc.value AS dc_flag, fc.fc_inventory_id
+  FROM dwd.mdse_product_warehouse mpw
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = mpw.product_id
+  LEFT JOIN dim.meta_code mc ON mc.key = mpw.purchase_method
+  LEFT JOIN fc_sku_scope_west fc ON fc.product_id = mpw.product_id
+  WHERE mpw.inventory_id IN (40)
+    AND mpw.purchase_status_desc LIKE 'Live%'
+    AND mpw.purchase_method IN ('D','B','I')
+    AND mc.type_id = 134
+  UNION ALL
+  SELECT DISTINCT mpw.inventory_id, mpw.product_id, mp.storage_type, mp.is_imported, mc.value, fc.fc_inventory_id
+  FROM dwd.mdse_product_warehouse mpw
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = mpw.product_id
+  LEFT JOIN dim.meta_code mc ON mc.key = mpw.purchase_method
+  LEFT JOIN fc_sku_scope_west fc ON fc.product_id = mpw.product_id
+  WHERE mpw.inventory_id = 37
+    AND mpw.purchase_status_desc LIKE 'Live%'
+    AND mpw.purchase_method IN ('D','B','I')
+    AND mc.type_id = 134
+    AND fc.fc_inventory_id IN (37,8)
+    AND (fc.storage_type LIKE 'R%' OR fc.storage_type LIKE 'F%')
+  UNION ALL
+  SELECT DISTINCT mpw.inventory_id, mpw.product_id, mp.storage_type, mp.is_imported, mc.value, fc.fc_inventory_id
+  FROM dwd.mdse_product_warehouse mpw
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = mpw.product_id
+  LEFT JOIN dim.meta_code mc ON mc.key = mpw.purchase_method
+  LEFT JOIN fc_sku_scope_west fc ON fc.product_id = mpw.product_id
+  WHERE mpw.inventory_id = 25
+    AND mpw.purchase_status_desc LIKE 'Live%'
+    AND mpw.purchase_method IN ('D','B','I')
+    AND mc.type_id = 134
+    AND fc.fc_inventory_id IN (25,20)
+    AND (fc.storage_type LIKE 'R%' OR fc.storage_type LIKE 'F%')
+),
+fc_sku_scope_east AS (
+  SELECT DISTINCT mpw.inventory_id AS fc_inventory_id, mpw.product_id, mp.storage_type, mp.is_imported, mc.value AS dc_flag
+  FROM dwd.mdse_product_warehouse mpw
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = mpw.product_id
+  LEFT JOIN dim.meta_code mc ON mc.key = mpw.purchase_method
+  WHERE mpw.inventory_id IN (35,29,41)
+    AND mpw.purchase_status_desc LIKE 'Live%'
+    AND mpw.purchase_method IN ('D','B','I')
+    AND mc.type_id = 134
+    AND mp.storage_type LIKE 'N%'
+  UNION ALL
+  SELECT DISTINCT mpw.inventory_id, mpw.product_id, mp.storage_type, mp.is_imported, mc.value
+  FROM dwd.mdse_product_warehouse mpw
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = mpw.product_id
+  LEFT JOIN dim.meta_code mc ON mc.key = mpw.purchase_method
+  WHERE mpw.inventory_id IN (35,29,33)
+    AND mpw.purchase_status_desc LIKE 'Live%'
+    AND mpw.purchase_method IN ('D','B','I')
+    AND mc.type_id = 134
+    AND mp.storage_type NOT LIKE 'N%'
+),
+dc_fc_mapping_east AS (
+  SELECT DISTINCT mpw.inventory_id AS dc_inventory_id, mpw.product_id, mp.storage_type, mp.is_imported, mc.value AS dc_flag, fc.fc_inventory_id
+  FROM dwd.mdse_product_warehouse mpw
+  LEFT JOIN dwd.mdse_product mp ON mp.product_id = mpw.product_id
+  LEFT JOIN dim.meta_code mc ON mc.key = mpw.purchase_method
+  LEFT JOIN fc_sku_scope_east fc ON fc.product_id = mpw.product_id
+  WHERE mpw.inventory_id = 33
+    AND mpw.purchase_status_desc LIKE 'Live%'
+    AND mpw.purchase_method IN ('D','B','I')
+    AND mc.type_id = 134
+),
+sc_dc_sku_east_west_nk_raw AS (
+  SELECT a.*, 'ERP Flags' AS sku_scope_src FROM dc_fc_mapping_east a
+  UNION ALL
+  SELECT b.*, 'ERP Flags' AS sku_scope_src FROM dc_fc_mapping_west b
+),
+sc_dc_sku_east_west_nk AS (
+  SELECT
+    CASE WHEN dc_inventory_id = 33 THEN 16 WHEN dc_inventory_id = 37 THEN 7 ELSE dc_inventory_id END AS dc_inventory_id,
+    CASE WHEN fc_inventory_id = 33 THEN 16 WHEN fc_inventory_id = 37 THEN 7 ELSE fc_inventory_id END AS fc_inventory_id,
+    product_id, storage_type, is_imported, dc_flag, sku_scope_src
+  FROM sc_dc_sku_east_west_nk_raw
+),
+
+master_dc_sku_dim as (
+SELECT
+    mds.product_id,
+    mp.short_title_en,
+    mp.storage_type,
+    mp.sku_owner,
+    mp.division,
+    mp.department_num || ' - ' || mp.department AS department_num,
+    mp.category_num || ' - ' || mp.category AS category,
+    mp.sub_category_num || ' - ' || mp.sub_category AS sub_category,
+    mp.product_ethnicity,
+    mptui2.tier AS tier,
+    mds.dc_flag,
+    mp.is_imported AS import_flag,
+    mds.dc_inventory_id,
+    i.inventory_id || ' - ' || i.inventory_title AS dc_inventory_title,
+    mds.fc_inventory_id,
+    i2.inventory_id || ' - ' || i2.inventory_title AS fc_inventory_title
+FROM sc_dc_sku_east_west_nk mds
+LEFT JOIN dwd.mdse_product mp 
+       ON mds.product_id = mp.product_id
+LEFT JOIN dim.inventory i
+       ON mds.dc_inventory_id = i.inventory_id
+LEFT JOIN dim.inventory i2
+       ON mds.fc_inventory_id = i2.inventory_id
+LEFT JOIN dwd.mdse_product_tier_u_inv mptui 
+       ON mptui.inventory_id = i.inventory_id
+      AND mptui.product_id   = mds.product_id
+LEFT JOIN dwd.mdse_product_tier_u_inv mptui2
+       ON mptui2.inventory_id= i2.inventory_id
+      AND mptui2.product_id  = mds.product_id
+),
+americold_inv as (
+SELECT
+    record_date AS create_date,
+    warehouse_number AS inventory_id,
+    product_id,
+    SUM(available_qty) AS quantity
+FROM dwd.sc_inventory_version
+WHERE record_date >= current_date - ({{inc_days}} + 84)
+  AND inventory_id = 106
+GROUP BY 1,2,3
+),
+mgx_inv as (
+SELECT
+    record_date AS create_date,
+    warehouse_number AS inventory_id,
+    product_id,
+    SUM(available_qty) AS quantity
+FROM dwd.sc_inventory_version
+WHERE record_date >= current_date - ({{inc_days}} + 84)
+  AND inventory_id = 107
+GROUP BY 1,2,3
+),
+nj_americold_inv as (
+SELECT
+    record_date AS create_date,
+    warehouse_number AS inventory_id,
+    product_id,
+    SUM(available_qty) AS quantity
+FROM dwd.sc_inventory_version
+WHERE record_date >= current_date - ({{inc_days}} + 84)
+  AND inventory_id = 108
+GROUP BY 1,2,3
+),
+dc_inv as (
+SELECT
+    x.create_date,
+    x.inventory_id,
+    x.product_id,
+    SUM(x.quantity) AS quantity
+FROM (
+    -- original FC inventory
+    SELECT
+        create_date,
+        inventory_id,
+        product_id,
+        quantity
+    FROM dws.sc_inv_product_qty_daily
+    WHERE create_date >= current_date - ({{inc_days}} + 84)
+
+    UNION ALL
+
+    -- La Mirada Americold  --> inventory_id = 25
+    SELECT
+        a.create_date,
+        25 AS inventory_id,
+        a.product_id,
+        a.quantity
+    FROM americold_inv a
+    WHERE create_date >= current_date - ({{inc_days}} + 84)
+
+    UNION ALL
+
+    -- MGX  --> New York DC (inventory_id = 16)
+    SELECT
+        a.create_date,
+        16 AS inventory_id,
+        a.product_id,
+        a.quantity
+    FROM mgx_inv a
+    WHERE create_date >= current_date - ({{inc_days}} + 84)
+
+    UNION ALL
+
+    -- NJ Americold --> New York DC (inventory_id = 16)
+    SELECT
+        a.create_date,
+        16 AS inventory_id,
+        a.product_id,
+        a.quantity
+    FROM nj_americold_inv a
+    WHERE create_date >= current_date - ({{inc_days}} + 84)
+) x
+GROUP BY 1,2,3
+),
+dc_fc_inventory as (
+SELECT
+    cal.cal_date AS date,
+    mdsd.*,
+    CASE WHEN dc_inv.quantity IS NULL THEN 0 ELSE dc_inv.quantity END AS dc_oh_inventory_qty,
+    CASE WHEN fc_inv.quantity IS NULL THEN 0 ELSE fc_inv.quantity END AS fc_oh_inventory_qty,
+    COALESCE(iiv.available_qty, 0) AS fc_sellable_inventory_qty
+FROM master_dc_sku_dim mdsd
+CROSS JOIN (
+    SELECT cal_date 
+    FROM dim.calendar
+    WHERE cal_date >= current_date - ({{inc_days}} + 84)
+    and cal_date <= current_date
+) cal
+LEFT JOIN dc_inv
+       ON cal.cal_date         = dc_inv.create_date
+      AND mdsd.product_id      = dc_inv.product_id
+      AND mdsd.dc_inventory_id = dc_inv.inventory_id
+LEFT JOIN dws.sc_inv_product_qty_daily fc_inv
+       ON cal.cal_date         = fc_inv.create_date
+      AND mdsd.product_id      = fc_inv.product_id
+      AND mdsd.fc_inventory_id = fc_inv.inventory_id
+LEFT JOIN dwd.sc_inventory_version iiv
+       ON cal.cal_date         = iiv.record_date
+      AND mdsd.product_id      = iiv.product_id
+      AND mdsd.fc_inventory_id = iiv.warehouse_number
+),
+fin_m as (
+SELECT
+    op.order_day AS date,
+    (DATE_TRUNC('week', op.order_day) - 1)::DATE AS order_week,
+    op.inventory_id AS fc_inventory_id,
+    op.product_id,
+    SUM(op.quantity) AS sold_qty,
+    SUM(op.sub_total) AS sub_total,
+    SUM(op.gm_margin) AS gm_margin,
+    SUM(op.gm_base)   AS gm_base,
+    SUM(op.gm_cost)   AS gm_cost
+FROM metrics.order_product op
+WHERE op.on_demand = 'N'
+  AND op.order_biz_type IN ('alcohol','grocery')
+  AND op.order_day >= current_date - ({{inc_days}} + 84 + 365)
+GROUP BY 1,2,3,4
+),
+fc_financial_metrics as (
+SELECT
+    ffm.*,
+    ffm2.sold_qty    AS ly_sold_qty,
+    ffm2.sub_total   AS ly_sub_total,
+    ffm2.gm_margin   AS ly_gm_margin,
+    ffm2.gm_base     AS ly_gm_base,
+    ffm2.gm_cost     AS ly_gm_cost
+FROM fin_m ffm
+INNER JOIN dim.calendar c
+        ON c.cal_date = ffm.date
+LEFT JOIN fin_m ffm2
+       ON ffm2.date            = c.ly_cal_date
+      AND ffm2.fc_inventory_id = ffm.fc_inventory_id
+      AND ffm2.product_id      = ffm.product_id
+INNER JOIN (
+    SELECT product_id
+    FROM sc_dc_sku_east_west_nk
+    GROUP BY 1
+) sku
+   ON sku.product_id = ffm.product_id
+),
+inv_t_date_scope as (
+SELECT DISTINCT
+    cal_date AS snapshot_date,
+    week_begin_date
+FROM dim.calendar
+WHERE cal_date >= current_date - ({{inc_days}} + 84)  and cal_date <= current_date
+),
+inv_t_wkly_cogs as (
+SELECT
+    itds.snapshot_date AS order_day,
+    itds.week_begin_date AS order_week,
+    ffm.fc_inventory_id,
+    ffm.product_id,
+    SUM(ffm.gm_cost)  AS gm_cost,
+    SUM(ffm.sold_qty) AS sold_qty
+FROM inv_t_date_scope itds
+LEFT JOIN fc_financial_metrics ffm
+       ON itds.snapshot_date = ffm.date
+GROUP BY 1,2,3,4
+),
+rolling_6wk_cogs_by_snapshot as (
+SELECT
+    ds.snapshot_date,
+    c.fc_inventory_id,
+    c.product_id,
+    SUM(c.gm_cost)  AS sum_6wk_cogs,
+    SUM(c.sold_qty) AS sum_6wk_quantity
+FROM inv_t_wkly_cogs c
+JOIN inv_t_date_scope ds
+  ON c.order_day BETWEEN ds.snapshot_date - INTERVAL '6 weeks' AND ds.snapshot_date
+GROUP BY 1,2,3
+),
+inv_t_wkly_avg_cogs as (
+SELECT
+    snapshot_date,
+    fc_inventory_id,
+    product_id,
+    SUM(sum_6wk_cogs)     AS t_sum_6wk_cogs,
+    SUM(sum_6wk_quantity) AS t_sum_6wk_quantity,
+    ROUND(SUM(sum_6wk_cogs) / 6, 2)               AS t_avg_wkly_cogs,
+    ROUND(SUM(sum_6wk_cogs) / SUM(sum_6wk_quantity), 2) AS auc
+FROM rolling_6wk_cogs_by_snapshot
+GROUP BY 1,2,3
+),
+avg_dc_inv as (
+SELECT DISTINCT
+    dfi.dc_inventory_id,
+    dfi.product_id,
+    c.week_begin_date,
+    dfi2.dc_oh_inventory_qty AS beg_inv,
+    c.week_end_date,
+    dfi3.dc_oh_inventory_qty AS end_inv
+FROM dc_fc_inventory dfi
+JOIN dim.calendar c
+      ON c.cal_date = dfi.date
+LEFT JOIN dc_fc_inventory dfi2
+       ON dfi2.date            = c.week_begin_date
+      AND dfi2.dc_inventory_id = dfi.dc_inventory_id
+      AND dfi2.product_id      = dfi.product_id
+LEFT JOIN dc_fc_inventory dfi3
+       ON dfi3.date            = c.week_end_date
+      AND dfi3.dc_inventory_id = dfi.dc_inventory_id
+      AND dfi3.product_id      = dfi.product_id
+WHERE 1=1
+),
+avg_6wks_dc_inv_by_snapshot_temp as (
+SELECT
+    ds.snapshot_date,
+    adi.dc_inventory_id,
+    adi.product_id,
+    AVG(adi.beg_inv) AS avg_beg_inv,
+    AVG(adi.end_inv) AS avg_end_inv
+FROM avg_dc_inv adi
+JOIN inv_t_date_scope ds
+  ON adi.week_begin_date BETWEEN ds.snapshot_date - INTERVAL '6 weeks' AND ds.snapshot_date
+GROUP BY 1,2,3
+),
+avg_6wks_dc_inv_by_snapshot as (
+SELECT
+    snapshot_date,
+    dc_inventory_id,
+    product_id,
+    SUM(avg_beg_inv + avg_end_inv)/2 AS avg_dc_wkly_inv
+FROM avg_6wks_dc_inv_by_snapshot_temp
+GROUP BY 1,2,3
+),
+sa as (
+SELECT
+    a.day - 1 AS create_date,
+    CASE WHEN c.storage_type='N' AND c.inventory_id=16 THEN 41 ELSE c.inventory_id END AS inventory_id,
+    a.product_id
+FROM dwd.mdse_product_list_history a
+LEFT JOIN dwd.mdse_product b
+       ON a.product_id = b.product_id
+LEFT JOIN (
+    SELECT DISTINCT
+        sales_org_id,
+        storage_type,
+        inventory_id
+    FROM metrics.order_product
+    WHERE payment_mode='F'
+      AND order_biz_type IN('grocery','alcohol')
+      AND order_day >= current_date - 56
+      AND inventory_id IN(7,8,16,20,25,29,35,41)
+) c
+    ON a.sales_org_id = c.sales_org_id
+   AND b.storage_type = c.storage_type
+LEFT JOIN dwd.mdse_product d
+       ON d.product_id = a.product_id
+INNER JOIN (
+    SELECT product_id
+    FROM sc_dc_sku_east_west_nk
+    GROUP BY 1
+) sku
+    ON sku.product_id = d.product_id
+WHERE a.day >= current_date - ({{inc_days}} + 84 + 1)
+  AND d.division IN('Protein','Dairy/Deli','Frozen','Produce','Dry Grocery','GM/HBC')
+GROUP BY 1,2,3
+HAVING MAX(a.available) > 0
+),
+sabq as (
+SELECT
+    sa.*,
+    COALESCE(bq.sold_qty, 0) AS sold_qty
+FROM sa
+LEFT JOIN (
+    SELECT
+        order_day,
+        CASE WHEN storage_type='N' AND inventory_id=16 THEN 41 ELSE inventory_id END AS inventory_id,
+        product_id,
+        SUM(quantity) AS sold_qty
+    FROM metrics.order_product op
+    WHERE op.order_day >= current_date - ({{inc_days}} + 84 + 2)
+      AND op.payment_mode = 'F'
+      AND op.order_biz_type IN('grocery','alcohol')
+      AND op.inventory_id IN(7,8,16,20,25,29,35,41)
+      AND op.product_id IN(
+          SELECT product_id
+          FROM dc_fc_inventory
+          GROUP BY 1
+      )
+    GROUP BY 1,2,3
+) bq
+    ON bq.product_id   = sa.product_id
+   AND bq.order_day    = sa.create_date
+   AND bq.inventory_id = sa.inventory_id
+),
+asq as (
+SELECT
+    sabq.*,
+    AVG(sold_qty::FLOAT) OVER(
+      PARTITION BY inventory_id, product_id
+      ORDER BY create_date ASC
+      ROWS BETWEEN 42 PRECEDING AND 1 PRECEDING
+    ) AS average_quantity_42_a,
+    AVG(sold_qty::FLOAT) OVER(
+      PARTITION BY inventory_id, product_id
+      ORDER BY create_date ASC
+      ROWS BETWEEN 41 PRECEDING AND CURRENT ROW
+    ) AS average_quantity_42_b
+FROM sabq
+),
+dip as (
+WITH a AS (
+    SELECT inventory_id AS virtual_warehouse_id, product_id
+    FROM metrics.order_product op
+    WHERE delivery_day >= current_date - ({{inc_days}} + 84)
+      AND order_day >= current_date - ({{inc_days}} + 84 + 30)
+      AND payment_mode='F'
+      AND order_biz_type IN('grocery','alcohol')
+      AND inventory_id IN(7,8,16,20,25,29,35,41)
+    GROUP BY 1,2
+),
+b AS (
+    SELECT cal_date AS update_date
+    FROM dim.calendar
+    WHERE cal_date >= current_date - ({{inc_days}} + 84)
+    GROUP BY 1
+)
+SELECT
+    a.product_id,
+    a.virtual_warehouse_id,
+    b.update_date
+FROM a, b
+),
+dao as (
+SELECT
+    dip.update_date,
+    dip.virtual_warehouse_id,
+    dip.product_id,
+    a.sold_qty,
+    COALESCE(a.average_quantity_42_a, b.average_quantity_42_b) AS daily_avg_42,
+    ROW_NUMBER() OVER(
+      PARTITION BY dip.update_date, dip.virtual_warehouse_id, dip.product_id
+      ORDER BY b.create_date DESC
+    ) AS rn
+FROM dip
+LEFT JOIN asq a
+       ON a.product_id   = dip.product_id
+      AND a.inventory_id = dip.virtual_warehouse_id
+      AND a.create_date  = dip.update_date
+      AND a.create_date >= dip.update_date - 180
+LEFT JOIN asq b
+       ON b.product_id   = dip.product_id
+      AND b.inventory_id = dip.virtual_warehouse_id
+      AND b.create_date  < dip.update_date
+      AND b.create_date >= dip.update_date - 180
+),
+sales as (
+SELECT *
+FROM dao
+WHERE rn = 1
+),
+sr_inv_mapping1 as (
+SELECT DISTINCT 
+    sales_region_id,
+    storage_type,
+    inventory_id
+FROM metrics.order_product
+WHERE payment_mode='F'
+  AND delivery_day > current_date-14
+  AND order_day > current_date - 30
+  AND NOT (
+    delivery_mode='shipping' 
+    AND sales_region_id NOT IN(24,29)
+  )
+  AND order_biz_type IN('grocery','alcohol','tiktok')
+  AND inventory_id IN(7,8,16,20,25,29,35,41)
+GROUP BY 1,2,3
+),
+daily_forecast1 as (
+SELECT
+    c.cal_date AS delivery_day,
+    df.week_start_date,
+    m.inventory_id,
+    df.product_id,
+    SUM(1.0*NVL(df.qty,0)/7 + 1.0*NVL(df.promolift_qty,0)/7) AS daily_df_qty
+FROM dwd.sc_demand_forecast_snapshot df
+LEFT JOIN dim.calendar c
+       ON c.week_begin_date= df.week_start_date::DATE
+LEFT JOIN dwd.mdse_product p
+       ON p.product_id= df.product_id
+LEFT JOIN sr_inv_mapping1 m
+       ON m.sales_region_id= df.sales_org_id
+      AND m.storage_type   = p.storage_type
+WHERE c.cal_date >= current_date - ({{inc_days}} + 84)
+  AND c.cal_date <= dateadd('week', 0, current_date)
+  AND df.product_id IN (
+      SELECT DISTINCT product_id
+      FROM dc_fc_inventory
+)
+GROUP BY 1,2,3,4
+
+UNION ALL  -- future 13wk forecast
+SELECT
+    c.cal_date AS delivery_day,
+    df.week_start_date::DATE AS week_start_date,
+    m.inventory_id,
+    df.product_id,
+    SUM(1.0*NVL(df.qty,0)/7 + 1.0*NVL(df.promolift_qty,0)/7) AS daily_df_qty
+FROM dwd.sc_demand_forecast df
+LEFT JOIN dim.calendar c
+       ON c.week_begin_date= df.week_start_date::DATE
+LEFT JOIN dwd.mdse_product p
+       ON p.product_id= df.product_id
+LEFT JOIN sr_inv_mapping1 m
+       ON m.sales_region_id= df.sales_org_id
+      AND m.storage_type   = p.storage_type
+WHERE df.week_start_date>= (
+    SELECT week_begin_date 
+    FROM dim.calendar 
+    WHERE cal_date= current_date+7
+)
+  AND df.week_start_date<= (
+    SELECT week_begin_date
+    FROM dim.calendar
+    WHERE cal_date= current_date+(13*7)
+)
+GROUP BY 1,2,3,4
+),
+daily_forecast_d as (
+SELECT
+    delivery_day AS day,
+    inventory_id,
+    product_id,
+    daily_df_qty,
+    1.0 * AVG(daily_df_qty::FLOAT IGNORE NULLS) OVER(
+      PARTITION BY inventory_id, product_id
+      ORDER BY delivery_day DESC
+      ROWS BETWEEN 84 PRECEDING AND 1 PRECEDING
+    )::FLOAT AS fcst_unit_12w_d_ma,
+    1.0 * AVG(daily_df_qty::FLOAT IGNORE NULLS) OVER(
+      PARTITION BY inventory_id, product_id
+      ORDER BY delivery_day DESC
+      ROWS BETWEEN 83 PRECEDING AND CURRENT ROW
+    )::FLOAT AS fcst_unit_12w_d_ma_t,
+    1.0 * AVG(daily_df_qty::FLOAT IGNORE NULLS) OVER(
+      PARTITION BY inventory_id, product_id
+      ORDER BY delivery_day DESC
+      ROWS BETWEEN 42 PRECEDING AND 1 PRECEDING
+    )::FLOAT AS fcst_unit_6w_d_ma,
+    1.0 * AVG(daily_df_qty::FLOAT IGNORE NULLS) OVER(
+      PARTITION BY inventory_id, product_id
+      ORDER BY delivery_day DESC
+      ROWS BETWEEN 41 PRECEDING AND CURRENT ROW
+    )::FLOAT AS fcst_unit_6w_d_ma_t
+FROM daily_forecast1
+),
+dfcst as (
+SELECT DISTINCT
+    cal_date AS day,
+    inventory_id,
+    product_id
+FROM daily_forecast_d, dim.calendar
+WHERE cal_date >= current_date - {{inc_days}}
+  AND cal_date <= current_date
+),
+dfcst2 as (
+SELECT
+    dfcst.*,
+    NVL(a.fcst_unit_6w_d_ma,  b.fcst_unit_6w_d_ma_t)   AS fcst_avg_6wk_d,
+    NVL(a.fcst_unit_12w_d_ma, b.fcst_unit_12w_d_ma_t)  AS fcst_avg_12wk_d,
+    ROW_NUMBER() OVER(
+      PARTITION BY dfcst.day, dfcst.inventory_id, dfcst.product_id
+      ORDER BY b.day
+    ) AS rn
+FROM dfcst
+LEFT JOIN daily_forecast_d a
+       ON a.day         = dfcst.day
+      AND a.inventory_id= dfcst.inventory_id
+      AND a.product_id  = dfcst.product_id
+LEFT JOIN daily_forecast_d b
+       ON b.day         > dfcst.day
+      AND b.inventory_id= dfcst.inventory_id
+      AND b.product_id  = dfcst.product_id
+),
+fcst as (
+SELECT *
+FROM dfcst2
+WHERE rn = 1
+),
+latest_cost as (
+SELECT
+    product_id,
+    MAX(date) AS max_date
+FROM dws.sc_product_price_daily
+GROUP BY 1
+),
+avg_cost as (
+SELECT
+    s.product_id,
+    i.inventory_id,
+    i.inventory_title,
+    s.purchase_price AS purchase_cost,
+    sia.avg_price    AS ma_avg_purchase_cost,
+    COALESCE(sia.avg_price, s.purchase_price) AS avg_cost
+FROM dws.sc_product_price_daily s
+INNER JOIN latest_cost ld
+       ON s.product_id = ld.product_id
+      AND s.date       = ld.max_date
+LEFT JOIN dim.inventory i
+       ON s.sales_region_id = i.sales_region_id
+LEFT JOIN dwd.sc_inventory_avg_price sia
+       ON sia.inventory_id = i.inventory_id
+      AND sia.product_id   = s.product_id
+WHERE COALESCE(sia.avg_price, s.purchase_price) IS NOT NULL
+  AND COALESCE(sia.avg_price, s.purchase_price) != 0
+),
+dc_open_po_1 as (
+SELECT
+    aa.purchase_order_id,
+    aa.product_id,
+    aa.inventory_id,
+    aa.po_type,
+    aa.po_status,
+    aa.po_status_desc,
+    aa.original_quantity * aa.quantity_per_unit AS original_ordered_quantity,
+    aa.purchase_product_quantity * aa.quantity_per_unit AS purchase_product_quantity,
+    (aa.original_quantity - aa.purchase_product_quantity) * aa.quantity_per_unit AS orig_purchased_delta,
+    aa.est_delivery_date,
+    aa.receipt_quantity,
+    aa.receipt_date,
+    aa.putaway_quantity,
+    aa.putaway_date,
+    aa.item_receipt_date,
+    CASE
+      WHEN receipt_date IS NULL AND po_status IN('A','C') 
+        THEN (purchase_product_quantity + purchase_gift_quantity) * quantity_per_unit
+      WHEN receipt_date IS NOT NULL 
+        THEN receipt_quantity - NVL(putaway_quantity, 0)
+      WHEN po_status IN('D','E','R','S') 
+        THEN receipt_quantity - NVL(putaway_quantity, 0)
+    END AS open_po_qty
+FROM dws.sc_purchase_order_product aa
+WHERE inventory_id IN(25,7,16,40)
+  AND product_id IN (
+      SELECT product_id 
+      FROM sc_dc_sku_east_west_nk
+      GROUP BY 1
+  )
+  AND po_status IN('D','E','R','S','A','C')
+  AND est_delivery_date >= current_date - 10
+),
+dc_open_po as (
+SELECT
+    inventory_id,
+    product_id,
+    SUM(open_po_qty) AS open_po_qty
+FROM dc_open_po_1
+WHERE open_po_qty > 0
+GROUP BY 1,2
+),
+dc_dashboard_nk_test1 as(
+-- 18) Final: dc_dashboard_nk_test1
+SELECT
+    dfi.*,
+    COALESCE(dop.open_po_qty,0) AS dc_open_po_qty,
+    ac.avg_cost,
+    CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(sales.daily_avg_42,0) END AS hist_daily_avg_sales_6wk,
+    CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(fcst.fcst_avg_6wk_d,0) END AS fcst_daily_avg_sales_6wk,
+    CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(fcst.fcst_avg_12wk_d,0) END AS fcst_daily_avg_sales_12wk,
+    COALESCE(ffm.sold_qty,0)   AS sold_qty,
+    COALESCE(ffm.sub_total,0)  AS sub_total,
+    COALESCE(ffm.gm_margin,0)  AS gm_margin,
+    COALESCE(ffm.gm_base,0)    AS gm_base,
+    COALESCE(ffm.gm_cost,0)    AS gm_cost,
+    COALESCE(ffm.ly_sold_qty,0)   AS ly_sold_qty,
+    COALESCE(ffm.ly_sub_total,0)  AS ly_sub_total,
+    COALESCE(ffm.ly_gm_margin,0)  AS ly_gm_margin,
+    COALESCE(ffm.ly_gm_base,0)    AS ly_gm_base,
+    COALESCE(ffm.ly_gm_cost,0)    AS ly_gm_cost,
+    ti.avg_dc_wkly_inv,
+    tc.t_sum_6wk_cogs       AS t_fc_sum_6wk_cogs,
+    tc.t_sum_6wk_quantity   AS t_fc_sum_6wk_quantity,
+    tc.t_avg_wkly_cogs      AS t_fc_avg_wkly_cogs,
+    GREATEST(
+      CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(sales.daily_avg_42,0) END,
+      CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(fcst.fcst_avg_12wk_d,0) END
+    ) AS instock_weight,
+    CASE WHEN dfi.fc_sellable_inventory_qty > 0 THEN '1' ELSE '0' END AS fc_instock_numerator,
+    1 AS fc_instock_denominator,
+    bb.bulkbuy_flag,
+    core.core_flag
+  FROM dc_fc_inventory dfi
+  LEFT JOIN sales
+         ON dfi.product_id      = sales.product_id
+        AND dfi.date           = sales.update_date
+        AND dfi.fc_inventory_id= sales.virtual_warehouse_id
+  LEFT JOIN fcst
+         ON dfi.product_id      = fcst.product_id
+        AND dfi.date           = fcst.day
+        AND dfi.fc_inventory_id= fcst.inventory_id
+  LEFT JOIN avg_cost ac
+         ON ac.product_id       = dfi.product_id
+        AND ac.inventory_id     = dfi.fc_inventory_id
+  LEFT JOIN dc_open_po dop
+         ON dop.inventory_id    = dfi.dc_inventory_id
+        AND dop.product_id      = dfi.product_id
+  LEFT JOIN fc_financial_metrics ffm
+         ON ffm.date            = dfi.date
+        AND ffm.fc_inventory_id = dfi.fc_inventory_id
+        AND ffm.product_id      = dfi.product_id
+  LEFT JOIN inv_t_wkly_avg_cogs tc
+         ON tc.snapshot_date    = dfi.date
+        AND tc.fc_inventory_id  = dfi.fc_inventory_id
+        AND tc.product_id       = dfi.product_id
+  LEFT JOIN avg_6wks_dc_inv_by_snapshot ti
+         ON ti.snapshot_date    = dfi.date
+        AND ti.dc_inventory_id  = dfi.dc_inventory_id
+        AND ti.product_id       = dfi.product_id
+  LEFT JOIN (
+    SELECT DISTINCT product_id, bulkbuy_flag
+    FROM sandbox.sc_bulkbuy_sku
+  ) bb
+    ON bb.product_id = dfi.product_id
+  LEFT JOIN (
+    SELECT
+        product_id,
+        CASE WHEN inventory_id=33 THEN 16 ELSE inventory_id END AS inventory_id,
+        inventory_title,
+        purchase_status_desc,
+        CASE WHEN assortment_role LIKE 'Core%' THEN 'Y' ELSE 'N' END AS core_flag
+    FROM dwd.mdse_product_warehouse mpw
+  ) core
+    ON dfi.fc_inventory_id= core.inventory_id
+   AND dfi.product_id     = core.product_id
+  WHERE 1=1
+    AND dfi.product_id NOT IN(103920,105078,107741)
+    AND import_flag!='Y'
+    AND dfi.date  BETWEEN current_date - {{inc_days}} AND current_date
+
+  UNION  -- different calculation for import:
+
+  SELECT
+    dfi.*,
+    COALESCE(dop.open_po_qty,0) AS dc_open_po_qty,
+    ac.avg_cost,
+    CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(sales.daily_avg_42,0) END AS hist_daily_avg_sales_6wk,
+    CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(fcst.fcst_avg_6wk_d,0) END AS fcst_daily_avg_sales_6wk,
+    CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(fcst.fcst_avg_12wk_d,0) END AS fcst_daily_avg_sales_12wk,
+    COALESCE(ffm.sold_qty,0)   AS sold_qty,
+    COALESCE(ffm.sub_total,0)  AS sub_total,
+    COALESCE(ffm.gm_margin,0)  AS gm_margin,
+    COALESCE(ffm.gm_base,0)    AS gm_base,
+    COALESCE(ffm.gm_cost,0)    AS gm_cost,
+    COALESCE(ffm.ly_sold_qty,0)    AS ly_sold_qty,
+    COALESCE(ffm.ly_sub_total,0)   AS ly_sub_total,
+    COALESCE(ffm.ly_gm_margin,0)   AS ly_gm_margin,
+    COALESCE(ffm.ly_gm_base,0)     AS ly_gm_base,
+    COALESCE(ffm.ly_gm_cost,0)     AS ly_gm_cost,
+    ti.avg_dc_wkly_inv,
+    tc.t_sum_6wk_cogs       AS t_fc_sum_6wk_cogs,
+    tc.t_sum_6wk_quantity   AS t_fc_sum_6wk_quantity,
+    tc.t_avg_wkly_cogs      AS t_fc_avg_wkly_cogs,
+    GREATEST(
+      CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(sales.daily_avg_42,0) END,
+      CASE WHEN dfi.fc_inventory_id IS NOT NULL THEN NVL(fcst.fcst_avg_12wk_d,0) END
+    ) AS instock_weight,
+    CASE WHEN dfi.fc_sellable_inventory_qty > 0 THEN '1' ELSE '0' END AS fc_instock_numerator,
+    1 AS fc_instock_denominator,
+    bb.bulkbuy_flag,
+    core.core_flag
+  FROM dc_fc_inventory dfi
+  LEFT JOIN sales
+         ON dfi.product_id      = sales.product_id
+        AND dfi.date           = sales.update_date
+        AND dfi.fc_inventory_id= sales.virtual_warehouse_id
+  LEFT JOIN fcst
+         ON dfi.product_id      = fcst.product_id
+        AND dfi.date           = fcst.day
+        AND dfi.fc_inventory_id= fcst.inventory_id
+  LEFT JOIN avg_cost ac
+         ON ac.product_id       = dfi.product_id
+        AND ac.inventory_id     = dfi.fc_inventory_id
+  LEFT JOIN dc_open_po dop
+         ON dop.inventory_id    = dfi.dc_inventory_id
+        AND dop.product_id      = dfi.product_id
+  LEFT JOIN fc_financial_metrics ffm
+         ON ffm.date            = dfi.date
+        AND ffm.fc_inventory_id = dfi.fc_inventory_id
+        AND ffm.product_id      = dfi.product_id
+  LEFT JOIN inv_t_wkly_avg_cogs tc
+         ON tc.snapshot_date    = dfi.date
+        AND tc.fc_inventory_id  = dfi.fc_inventory_id
+        AND tc.product_id       = dfi.product_id
+  LEFT JOIN avg_6wks_dc_inv_by_snapshot ti
+         ON ti.snapshot_date    = dfi.date
+        AND ti.dc_inventory_id  = dfi.dc_inventory_id
+        AND ti.product_id       = dfi.product_id
+  LEFT JOIN (
+    SELECT DISTINCT product_id, bulkbuy_flag
+    FROM sandbox.sc_bulkbuy_sku
+  ) bb
+    ON bb.product_id= dfi.product_id
+  LEFT JOIN (
+    SELECT
+        product_id,
+        CASE WHEN inventory_id=33 THEN 16 ELSE inventory_id END AS inventory_id,
+        inventory_title,
+        purchase_status_desc,
+        CASE WHEN assortment_role LIKE 'Core%' THEN 'Y' ELSE 'N' END AS core_flag
+    FROM dwd.mdse_product_warehouse mpw
+  ) core
+    ON dfi.fc_inventory_id= core.inventory_id
+   AND dfi.product_id     = core.product_id
+  WHERE 1=1
+    AND dfi.product_id NOT IN(103920,105078,107741)
+    AND import_flag='Y'
+    AND dfi.date  BETWEEN current_date - {{inc_days}} AND current_date
+    )
+     SELECT
+         product_id
+       , CASE WHEN dc_inventory_id=16 THEN 33 WHEN dc_inventory_id=7 THEN 37 ELSE dc_inventory_id END AS dc_inventory_id
+       , date AS latest_date
+       , SUM(hist_daily_avg_sales_6wk) AS total_hist_sales
+       , SUM(fcst_daily_avg_sales_6wk) AS total_frcst
+       , SUM(hist_daily_avg_sales_6wk) AS total_hist_sales_avg
+       , SUM(t_fc_sum_6wk_cogs)        AS t_fc_sum_6wk_cogs
+       , SUM(t_fc_avg_wkly_cogs)       AS t_fc_avg_wkly_cogs
+     FROM dc_dashboard_nk_test1
+     GROUP BY product_id, dc_inventory_id, 3
+  ) zhe
+    ON ru.product_id  = zhe.product_id
+   AND ru.inventory_id= zhe.dc_inventory_id
+   AND ru.create_date = zhe.latest_date
+  LEFT JOIN dwd.mdse_product p
+    ON p.product_id = ru.product_id
+)
+
+SELECT *
+FROM fc_datasource
+where create_date >= current_date - {{inc_days}}
+  and create_date <= current_date ;
