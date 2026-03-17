@@ -1,0 +1,444 @@
+-- ===========================
+-- 1️⃣ Campaign SKU extraction
+-- ===========================
+DROP TABLE IF EXISTS campaign_sku_raw;
+CREATE TEMP TABLE campaign_sku_raw AS (
+	SELECT DISTINCT
+		i.ref_inventory_id AS inventory_id,
+		ppep.product_id,
+		ppe.start_time::DATE AS event_start_date,
+		ppe.end_time::DATE AS event_end_date,
+		ppe.event_code,
+		ppep.is_approved,
+		mppes.storefront_key AS event_storefront,
+		CASE 
+			WHEN ppe.type_id = 1 THEN 'Crazy 8'
+			WHEN ppe.type_id IN (2,6) THEN 'Weekly Deals'
+			WHEN ppe.type_id IN (3,5) THEN 'Vendor Ads'
+			WHEN ppe.type_id = 7 THEN 'Hot Deals'
+			ELSE 'Null' 
+		END AS event_type
+	FROM dwd.pps_promotion_event_product ppep
+	JOIN dwd.pps_promotion_event ppe 
+		ON ppe.event_code = ppep.event_code
+	JOIN dwd.mdse_product mp 
+		ON mp.product_id = ppep.product_id
+	JOIN dwd.wms_inv_sales_mapping sp 
+		ON sp.sales_org_id = ppep.sales_org_id 
+	   AND sp.storage_type = mp.storage_type
+	JOIN dim.inventory i 
+		ON i.inventory_id = sp.physical_warehouse_number
+	JOIN dwd.mdse_pps_promotion_event_storefront mppes 
+		ON mppes.event_code = ppe.event_code
+	WHERE ppe.type_id IN (1,2,3,5,6,7)
+	  AND ppe.start_time::DATE >= CURRENT_DATE - 7
+	  AND ppep.product_id <= 2000000
+);
+
+DROP TABLE IF EXISTS campaign_sku;
+CREATE TEMP TABLE campaign_sku AS (
+	SELECT 
+		inventory_id,
+		product_id,
+		event_start_date,
+		event_end_date,
+		is_approved,
+		LISTAGG(event_storefront, ', ') AS event_storefront,
+		event_type
+	FROM campaign_sku_raw
+	WHERE product_id <= 2000000
+	GROUP BY 1,2,3,4,5,7
+);
+
+-- ===========================
+-- 2️⃣ Open PO data
+-- ===========================
+DROP TABLE IF EXISTS open_po;
+CREATE TEMP TABLE open_po AS (
+	SELECT
+	   aa.purchase_order_id,
+	   aa.product_id,
+	   aa.inventory_id,
+	   aa.po_type,
+	   aa.po_status,
+	   aa.po_status_desc,
+	   aa.original_quantity * aa.quantity_per_unit AS original_ordered_quantity,
+	   aa.est_delivery_date,
+	   aa.receipt_quantity,
+	   aa.receipt_date,
+	   aa.putaway_quantity,
+	   aa.putaway_date,
+	   aa.item_receipt_date,
+	   CASE 
+			WHEN po_status IN ('P') AND receipt_date IS NULL 
+			 THEN (original_quantity + original_gift_quantity) * quantity_per_unit
+	   END AS pending_po_qty,
+	   CASE
+			WHEN receipt_date IS NULL AND po_status NOT IN ('P') 
+			 THEN (original_quantity + original_gift_quantity) * quantity_per_unit
+			WHEN receipt_date IS NOT NULL 
+			 THEN receipt_quantity - NVL(putaway_quantity, 0)
+			WHEN po_status IN ('D','E','R','S') 
+			 THEN receipt_quantity - NVL(putaway_quantity, 0)
+	   END AS open_po_qty
+   FROM dws.sc_purchase_order_product aa
+   WHERE po_status IN ('D','E','R','S','A','C','P')
+	 AND aa.inventory_id NOT IN (38,39,40)
+	 AND est_delivery_date >= CURRENT_DATE - 10
+	 AND aa.product_id <= 2000000
+);
+
+DROP TABLE IF EXISTS open_po1;
+CREATE TEMP TABLE open_po1 AS (
+	SELECT 
+		inventory_id,
+		product_id,
+		purchase_order_id,
+		est_delivery_date,
+		SUM(open_po_qty) AS open_po_qty,
+		SUM(pending_po_qty) AS pending_po_qty
+	FROM open_po
+	WHERE (open_po_qty > 0 OR pending_po_qty > 0)
+	GROUP BY 1,2,3,4
+);
+
+-- ===========================
+-- 3️⃣ Internal orders (DC ↔ FC)
+-- ===========================
+DROP TABLE IF EXISTS internal_dc_fc_oo;
+CREATE TEMP TABLE internal_dc_fc_oo AS (
+	SELECT
+		i.sales_org_id,
+		c.week_begin_date,
+		i.delivery_date AS it_delivery_date,
+		inv.ref_inventory_id,
+		i.status AS invoice_status,
+		i.id AS invoice_id,
+		ip.product_id,
+		ip.original_quantity,
+		ii.invoice_id AS internal_invoice_id,
+		iip.product_id AS internal_product_id,
+		iip.receipt_quantity,
+		ip.original_quantity - NVL(iip.receipt_quantity, 0) AS in_transit_qty,
+		DATEDIFF(DAY, ii.rec_update_time, CURRENT_DATE)
+	FROM dwd.invoice i
+	LEFT JOIN dwd.wms_invoice_internal ii ON i.id = ii.invoice_id
+	LEFT JOIN dwd.trx_invoice_line ip ON ii.invoice_id = ip.invoice_id
+	LEFT JOIN (
+		SELECT invoice_id, product_id, SUM(quantity) AS receipt_quantity
+		FROM dim.invoice_line_internal
+		GROUP BY 1,2
+	) iip ON ii.invoice_id = iip.invoice_id AND iip.product_id = ip.product_id
+	LEFT JOIN dim.calendar c ON DATE(ii.eta_date) = c.cal_date
+	LEFT JOIN dim.inventory inv ON inv.inventory_id = ii.target_warehouse_num
+	WHERE i.order_type = 'I'
+	  AND i.status IN ('A','C','D')
+	  AND ip.product_id <= 2000000
+);
+
+DROP TABLE IF EXISTS internal_dc_fc_oo1;
+CREATE TEMP TABLE internal_dc_fc_oo1 AS (
+	SELECT
+		ref_inventory_id AS inventory_id,
+		invoice_id,
+		product_id,
+		it_delivery_date,
+		SUM(in_transit_qty) AS internal_on_order
+	FROM internal_dc_fc_oo
+	GROUP BY 1,2,3,4
+	HAVING SUM(in_transit_qty) > 0
+);
+
+-- ===========================
+-- 4️⃣ All open orders
+-- ===========================
+DROP TABLE IF EXISTS all_open_orders_detailed;
+CREATE TEMP TABLE all_open_orders_detailed AS (
+	SELECT 
+		inventory_id,
+		product_id,
+		purchase_order_id AS open_order_id,
+		'est_po' AS order_type,
+		est_delivery_date AS delivery_date
+	FROM open_po1
+	WHERE product_id <= 2000000
+
+	UNION ALL
+
+	SELECT 
+		inventory_id,
+		product_id,
+		invoice_id AS open_order_id,
+		'internal' AS order_type,
+		it_delivery_date AS delivery_date
+	FROM internal_dc_fc_oo1
+	WHERE product_id <= 2000000
+);
+
+-- ===========================
+-- 5️⃣ DAILY forecast (real day-level)
+-- ===========================
+DROP TABLE IF EXISTS daily_fcst;
+CREATE TEMP TABLE daily_fcst AS (
+	SELECT
+		df.day::DATE AS day,
+		i.ref_inventory_id AS inventory_id,
+		df.product_id,
+		SUM(df.qty_final) AS daily_fcst
+	FROM dwd.df_demand_forecast_daily df
+	JOIN dwd.mdse_product p 
+		ON p.product_id = df.product_id
+	JOIN dwd.wms_inv_sales_mapping m 
+		ON m.sales_org_id = df.sales_org_id 
+	   AND m.storage_type = p.storage_type
+	JOIN dim.inventory i 
+		ON i.inventory_id = m.physical_warehouse_number
+	WHERE df.product_id IN (SELECT DISTINCT product_id FROM campaign_sku)
+	  AND df.product_id <= 2000000
+	  AND df.day >= CURRENT_DATE - 21
+	  AND i.ref_inventory_id IS NOT NULL
+	GROUP BY 1,2,3
+);
+
+-- ===========================
+-- 6️⃣ Campaign forecast (from current date to promotion end)
+-- ===========================
+DROP TABLE IF EXISTS campaign_fcst_raw;
+CREATE TEMP TABLE campaign_fcst_raw AS (
+  SELECT
+    cs.inventory_id,
+    cs.product_id,
+    cs.event_start_date,
+    cs.event_end_date,
+    df.day,
+    df.daily_fcst
+  FROM campaign_sku cs
+  LEFT JOIN daily_fcst df 
+    ON cs.inventory_id = df.inventory_id
+   AND cs.product_id  = df.product_id
+   AND df.day BETWEEN CURRENT_DATE AND cs.event_end_date
+  WHERE cs.product_id <= 2000000
+);
+
+DROP TABLE IF EXISTS campaign_fcst;
+CREATE TEMP TABLE campaign_fcst AS (
+  SELECT
+    inventory_id,
+    product_id,
+    event_start_date,
+    event_end_date,
+    SUM(daily_fcst) AS total_forecast
+  FROM (
+    SELECT DISTINCT
+      inventory_id,
+      product_id,
+      event_start_date,
+      event_end_date,
+      day,
+      daily_fcst
+    FROM campaign_fcst_raw
+    WHERE product_id <= 2000000
+  ) dedup
+  GROUP BY inventory_id,
+           product_id,
+           event_start_date,
+           event_end_date
+);
+
+-- ===========================
+-- 7️⃣ FC–DC Inventory Relationship (zero out DC qty for F/R self-DC FCs)
+-- ===========================
+DROP TABLE IF EXISTS fcdc_relationship;
+CREATE TEMP TABLE fcdc_relationship AS
+WITH pqd_fc AS (
+  SELECT inventory_id, product_id, MAX(quantity) AS quantity
+  FROM dws.sc_inv_product_qty_daily
+  WHERE create_date = CURRENT_DATE - 1 
+    AND product_id <= 2000000
+  GROUP BY 1,2
+),
+pqd_dc AS (
+  SELECT inventory_id, product_id, MAX(quantity) AS quantity
+  FROM dws.sc_inv_product_qty_daily
+  WHERE create_date = CURRENT_DATE - 1 
+    AND product_id <= 2000000
+  GROUP BY 1,2
+)
+SELECT
+  m.product_id,
+  m.fc_inventory_id,
+  m.dc_inventory_id,
+  COALESCE(pf.quantity, 0) AS fc_oh_inventory_qty,
+  CASE 
+    WHEN m.fc_inventory_id IN (16,33,7,37,25)
+         AND m.storage_type IN ('F','R')
+      THEN 0
+    ELSE COALESCE(pd.quantity, 0)
+  END AS dc_oh_inventory_qty,
+  m.storage_type,
+  m.is_imported,
+  m.dc_flag,
+  m.sku_scope_src
+FROM sandbox.sc_dc_sku_east_west_nk m
+LEFT JOIN pqd_fc pf
+  ON pf.inventory_id = m.fc_inventory_id
+ AND pf.product_id   = m.product_id
+LEFT JOIN pqd_dc pd
+  ON pd.inventory_id = m.dc_inventory_id
+ AND pd.product_id   = m.product_id
+WHERE m.product_id <= 2000000;
+
+DROP TABLE IF EXISTS fcdc_inv;
+CREATE TEMP TABLE fcdc_inv AS
+SELECT
+  product_id,
+  fc_inventory_id,
+  MAX(fc_oh_inventory_qty) AS fc_oh_inventory_qty,
+  SUM(COALESCE(dc_oh_inventory_qty,0)) AS dc_oh_inventory_qty
+FROM fcdc_relationship
+GROUP BY product_id, fc_inventory_id;
+
+DROP TABLE IF EXISTS dc_inventory;
+CREATE TEMP TABLE dc_inventory AS
+SELECT
+  fc_inventory_id AS inventory_id,
+  product_id,
+  dc_oh_inventory_qty
+FROM fcdc_inv
+WHERE product_id <= 2000000;
+
+-- ===========================
+-- 8️⃣ Final aggregated table
+-- ===========================
+DROP TABLE IF EXISTS sandbox.promotion_event_inventory_planning_2026;
+CREATE TABLE sandbox.promotion_event_inventory_planning_2026 AS
+SELECT
+    cs.event_start_date,
+    cs.event_end_date,
+    cs.is_approved,
+    cs.inventory_id,
+    cs.inventory_id || ' - ' || i.inventory_title AS inventory,
+    cs.product_id,
+    mp.short_title_en,
+    mp.storage_type,
+    mp.is_imported,
+    mp.division,
+    mp.sku_owner,
+    mptui.tier,
+    mp.product_ethnicity,
+    cs.event_storefront,
+    cs.event_type,
+    CASE WHEN mds.dc_flag = 'Y' THEN 'dc_sku'
+         WHEN mds.dc_flag IS NULL THEN 'local_sku' END AS purchase_flag,
+    mpw.purchase_status,
+    MIN(NVL(di.dc_oh_inventory_qty,0))         AS dc_inventory_qty,
+    MIN(NVL(cf.total_forecast,0))              AS total_forecast,
+    MIN(GREATEST(siv.available_qty,0))         AS inventory_qty,
+    SUM(NVL(cc.open_po_qty,0))                 AS local_open_po,
+    SUM(NVL(cc.pending_po_qty,0))              AS local_pending_po,
+    SUM(NVL(dd.internal_on_order,0))           AS internal_open_po,
+    ao.open_order_id,
+    ao.delivery_date AS est_delivery_date
+FROM campaign_sku cs
+LEFT JOIN dim.inventory i
+  ON i.inventory_id = cs.inventory_id
+LEFT JOIN dwd.mdse_product mp
+  ON mp.product_id = cs.product_id
+LEFT JOIN dwd.mdse_product_tier_u_inv mptui
+  ON mptui.inventory_id = cs.inventory_id
+ AND mptui.product_id  = cs.product_id
+LEFT JOIN (
+    SELECT DISTINCT fc_inventory_id, product_id, dc_flag
+    FROM dws.sc_master_dc_sku
+) mds
+  ON mds.fc_inventory_id = cs.inventory_id
+ AND mds.product_id      = cs.product_id
+LEFT JOIN dc_inventory di
+  ON di.product_id  = cs.product_id
+ AND di.inventory_id = cs.inventory_id
+LEFT JOIN campaign_fcst cf
+  ON cf.inventory_id     = cs.inventory_id
+ AND cf.product_id       = cs.product_id
+ AND cf.event_start_date = cs.event_start_date
+LEFT JOIN dwd.sc_inventory_version siv
+  ON siv.warehouse_number = cs.inventory_id
+ AND siv.product_id       = cs.product_id
+ AND siv.record_date::DATE = CURRENT_DATE
+LEFT JOIN open_po1 cc
+  ON cc.product_id   = cs.product_id
+ AND cc.inventory_id = cs.inventory_id
+ AND cc.est_delivery_date <= cs.event_start_date + 3
+LEFT JOIN internal_dc_fc_oo1 dd
+  ON dd.product_id   = cs.product_id
+ AND dd.inventory_id = cs.inventory_id
+ AND dd.it_delivery_date <= cs.event_start_date + 3
+LEFT JOIN all_open_orders_detailed ao
+  ON ao.inventory_id = cs.inventory_id
+ AND ao.product_id   = cs.product_id
+ AND ao.delivery_date <= cs.event_start_date + 3
+LEFT JOIN dwd.mdse_product_warehouse mpw
+  ON mpw.product_id  = cs.product_id
+ AND mpw.inventory_id = cs.inventory_id
+WHERE mp.division != 'Produce'
+  AND cs.product_id <= 2000000
+  AND cs.event_start_date BETWEEN CURRENT_DATE - 9 AND CURRENT_DATE + 28
+  AND (mpw.purchase_status IS NULL OR mpw.purchase_status <> 'O')
+GROUP BY
+    1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,
+    24,25;
+
+-- ===========================
+-- 9️⃣ DC inventory adjustment logic
+-- ===========================
+DROP TABLE IF EXISTS tmp_whcfg;
+CREATE TEMP TABLE tmp_whcfg AS
+SELECT DISTINCT CAST(item_number AS BIGINT) AS product_id
+FROM dwd.flattened_wh_config
+WHERE item_number IS NOT NULL
+  AND CAST(item_number AS BIGINT) <= 2000000;
+
+DROP TABLE IF EXISTS tmp_pd_today;
+CREATE TEMP TABLE tmp_pd_today AS
+SELECT inventory_id, product_id, MAX(quantity) AS quantity
+FROM dws.sc_inv_product_qty_daily
+WHERE create_date = CURRENT_DATE 
+  AND inventory_id IN (16,33,41)
+  AND product_id <= 2000000
+GROUP BY 1,2;
+
+DROP TABLE IF EXISTS tmp_sum_16_33_41;
+CREATE TEMP TABLE tmp_sum_16_33_41 AS
+SELECT product_id, SUM(quantity) AS sum_qty
+FROM tmp_pd_today
+GROUP BY 1;
+
+UPDATE sandbox.promotion_event_inventory_planning_2026
+SET dc_inventory_qty = COALESCE(s.sum_qty, dc_inventory_qty)
+FROM tmp_whcfg w
+LEFT JOIN tmp_sum_16_33_41 s
+  ON s.product_id = w.product_id
+WHERE sandbox.promotion_event_inventory_planning_2026.product_id = w.product_id
+  AND sandbox.promotion_event_inventory_planning_2026.inventory_id = 41;
+
+UPDATE sandbox.promotion_event_inventory_planning_2026
+SET dc_inventory_qty = COALESCE(p.quantity, dc_inventory_qty)
+FROM tmp_whcfg w
+LEFT JOIN tmp_pd_today p
+  ON p.product_id = w.product_id
+WHERE sandbox.promotion_event_inventory_planning_2026.product_id = w.product_id
+  AND sandbox.promotion_event_inventory_planning_2026.inventory_id IN (16,33)
+  AND p.inventory_id = sandbox.promotion_event_inventory_planning_2026.inventory_id;
+
+UPDATE sandbox.promotion_event_inventory_planning_2026
+SET inventory_qty = COALESCE(dc_inventory_qty, inventory_qty)
+WHERE inventory_id = 41
+  AND product_id IN (
+    SELECT CAST(item_number AS BIGINT)
+    FROM dwd.flattened_wh_config
+    WHERE item_number IS NOT NULL
+      AND CAST(item_number AS BIGINT) <= 2000000
+  );
+
+SELECT * 
+FROM sandbox.promotion_event_inventory_planning_2026
+WHERE product_id <= 2000000;
