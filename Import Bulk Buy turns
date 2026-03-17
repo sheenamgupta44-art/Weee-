@@ -1,0 +1,307 @@
+WITH bb_sku_list AS (
+SELECT
+    pa.visit_day,
+    pa.product_id,
+    pa.inventory_id,
+    MIN(pa.inventory_title) AS inventory_title,
+    MIN(pa.product_sale_status_title) AS purchase_status_desc,
+    MIN(pa.product_title_en) AS product_title_en,
+    MIN(pa.core_flag) AS core_flag,
+    MIN(pa.division) AS division,
+    MIN(pa.category) AS category,
+    MIN(pa.sub_category) AS sub_category,
+    MIN(pa.sku_owner) AS sku_owner,
+    MIN(pa.product_ethnicity) AS product_ethnicity,
+    MIN(pa.purchase_method) AS purchase_method,
+    MIN(pa.storage_type) AS storage_type,
+    MIN(pa.primary_vendor) AS primary_vendor_id,
+    MIN(pa.primary_vendor_title) AS primary_vendor_title
+FROM 
+    metrics.product_availability pa
+WHERE 
+    pa.visit_day >= CURRENT_DATE - INTERVAL '90 days'  -- Ensure the date is within the last 90 days
+    AND (
+        pa.purchase_method IN ('B', 'I') 
+        OR (
+            pa.purchase_method = 'D' 
+            AND EXISTS (
+                SELECT 1
+                FROM metrics.product_availability mpw2
+                WHERE mpw2.product_id = pa.product_id
+                AND mpw2.purchase_method = 'B'
+                and mpw2.product_sale_status_title = 'Live'
+                AND mpw2.visit_day = pa.visit_day
+                AND mpw2.inventory_id != pa.inventory_id  -- Ensure different inventory_id
+            )
+        )
+    )
+GROUP BY 
+    pa.visit_day,
+    pa.product_id,
+    pa.inventory_id
+),
+date_scope AS (
+    SELECT DISTINCT
+        cal_date AS snapshot_date
+    FROM dim.calendar
+    WHERE cal_date BETWEEN '2024-08-01' AND CURRENT_DATE
+    ORDER BY 1 DESC
+),
+cogs AS (
+    SELECT DISTINCT
+        (date_trunc('week', op.order_day) - 1)::date AS order_week,
+        op.order_day,
+        op.inventory_id,
+        op.product_id,
+        SUM(op.gm_cost) AS cogs
+    FROM metrics.order_product op
+    WHERE op.order_day >= '2024-08-01'
+      AND op.order_biz_type IN ('alcohol', 'grocery')
+    GROUP BY 1, 2, 3, 4
+),
+rolling_6wk_cogs_by_snapshot AS (
+    SELECT
+        ds.snapshot_date,
+        c.inventory_id,
+        c.product_id,
+        SUM(c.cogs) AS sum_6wk_cogs,
+        SUM(c.cogs) / COUNT(DISTINCT c.order_day) AS avg_6wk_cogs
+    FROM cogs c
+    JOIN date_scope ds ON c.order_day BETWEEN ds.snapshot_date - INTERVAL '6 weeks' AND ds.snapshot_date
+    GROUP BY 1, 2, 3
+),
+avg_inv AS (
+    SELECT 
+        i1.product_id,
+        i1.inventory_id,
+        cal.week_begin_date AS week_begin_date,
+        i2.create_date AS week_end_date,
+        SUM(i1.quantity) AS beg_inv,
+        SUM(i2.quantity) AS end_inv
+    FROM dwd.sc_inv_product_qty_daily i1
+    JOIN (
+        SELECT DISTINCT week_begin_date, week_end_date
+        FROM dim.calendar 
+        WHERE cal_date > '2024-08-01' AND cal_date < CURRENT_DATE - 7
+    ) cal ON cal.week_begin_date = i1.create_date
+    JOIN dwd.sc_inv_product_qty_daily i2 ON i1.product_id = i2.product_id 
+                                        AND i1.inventory_id = i2.inventory_id 
+                                        AND cal.week_end_date = i2.create_date
+    WHERE i1.inventory_id IN (7, 8, 16, 20, 25, 29, 35, 38, 41)
+    GROUP BY 1, 2, 3, 4
+),
+avg_6wks_inv_by_snapshot AS (
+    SELECT 
+        ds.snapshot_date,
+        ai.inventory_id,
+        ai.product_id,
+        AVG(ai.beg_inv) AS avg_beg_inv,
+        AVG(ai.end_inv) AS avg_end_inv
+    FROM avg_inv ai
+    JOIN date_scope ds ON ai.week_begin_date BETWEEN ds.snapshot_date - INTERVAL '6 weeks' AND ds.snapshot_date
+    GROUP BY 1, 2, 3
+),
+daily_snapshot_turns AS (
+    SELECT DISTINCT
+        c.snapshot_date,
+        c.inventory_id,
+        c.product_id,
+        c.sum_6wk_cogs / 6 AS avg_wkly_cogs,
+        a.avg_beg_inv AS avg_wkly_beg_inv,
+        a.avg_end_inv AS avg_wkly_end_inv,
+        (a.avg_beg_inv + a.avg_end_inv) / 2 AS avg_wkly_inv,
+        (a.avg_beg_inv + a.avg_end_inv) / 2 * (c.sum_6wk_cogs / 6) AS avg_inv_cost
+    FROM rolling_6wk_cogs_by_snapshot c
+    LEFT JOIN dwd.mdse_product mp ON mp.product_id = c.product_id
+    JOIN avg_6wks_inv_by_snapshot a 
+        ON c.snapshot_date = a.snapshot_date 
+        AND c.inventory_id = a.inventory_id 
+        AND c.product_id = a.product_id
+    WHERE mp.division != 'Produce'
+),
+bb_sku_price as (
+    SELECT 
+        bb.visit_day,
+        bb.product_id,
+        bb.inventory_id,
+        bb.purchase_method,
+        bb.primary_vendor_id,
+        CASE
+            WHEN MAX(spop.cost_per_unit) IS NOT NULL THEN MAX(spop.cost_per_unit)
+            ELSE NULL 
+        END AS cost_per_unit,
+        MAX(spop.item_receipt_date) AS max_item_receipt_date  
+    FROM 
+        bb_sku_list bb
+    LEFT JOIN 
+        dws.sc_purchase_order_product spop 
+        ON bb.product_id = spop.product_id 
+        AND bb.inventory_id = spop.inventory_id
+    WHERE 
+        (spop.item_receipt_date IS NULL OR spop.item_receipt_date >= bb.visit_day - INTERVAL '120 DAY')  
+    GROUP BY 
+        bb.visit_day, 
+        bb.product_id, 
+        bb.inventory_id, 
+        bb.purchase_method,
+        bb.primary_vendor_id
+), refund_margin as (
+select bb.visit_day,bb.product_id,bb.inventory_id,
+sum(op.product_refund_amount) as product_refund_amount,
+sum(product_return_quantity) as product_return_quantity,
+sum(gm_margin) as gm_margin,
+sum(gm_base) as gm_base
+from bb_sku_list bb
+left join metrics.grocery_order_product op on 
+bb.product_id = op.product_id and bb.inventory_id = op.inventory_id and bb.visit_day = op.order_day
+group by bb.visit_day,bb.product_id,bb.inventory_id
+)
+, sales as (
+select
+    bb.visit_day,
+    bb.inventory_id,
+    bb.product_id,
+    sum(op.quantity) AS sold_qty,
+    sum(op.product_price*op.quantity) as revenue
+FROM bb_sku_list bb
+left join metrics.order_product op on bb.product_id = op.product_id and bb.inventory_id = op.inventory_id 
+WHERE op.order_biz_type IN ('grocery', 'alcohol')
+    AND op.payment_mode = 'F'
+    and op.order_day = bb.visit_day
+    --AND op.order_day BETWEEN (la.last_available_date - INTERVAL '7 days') AND la.last_available_date
+GROUP BY bb.visit_day,bb.product_id, bb.inventory_id )
+, 
+lead_time_adjusted_df as (
+select bb.visit_day,bb.product_id,bb.inventory_id,
+min(df.sales_org_id) as sales_org_id,
+min(irs.final_planning_horizon_days) as final_planning_horizon_days,
+min(bb.visit_day - irs.final_planning_horizon_days) as snapshot_date, 
+min(df.day) as date_demand_forecasted_for,
+min(df.qty_final) as qty_forecasted
+from dwd.df_demand_forecast_daily_snapshot63 df inner join 
+dwd.wms_inv_sales_mapping ism on df.sales_org_id = ism.sales_org_id
+inner join bb_sku_list bb on 
+bb.product_id = df.product_id and bb.inventory_id = ism.warehouse_number and bb.visit_day = df.day
+left join dwd.irs_network_product_calculation irs on 
+irs.product_id = bb.product_id and irs.facility_id = bb.inventory_id and irs.snapshot_date = bb.visit_day
+    WHERE 
+        (
+            df.snapshot_date - bb.visit_day <= 7
+            AND df.snapshot_date - bb.visit_day > 0
+        )
+        OR 
+        (
+            df.snapshot_date - bb.visit_day > 28
+            AND df.snapshot_date - bb.visit_day <= 35
+        )
+    GROUP BY 
+        bb.visit_day,bb.product_id,bb.inventory_id
+),
+forecast_prep_backup as (
+        SELECT 
+            bb.visit_day,
+            bb.product_id,
+            bb.inventory_id,
+            df.sales_org_id,
+            irs.final_planning_horizon_days,
+            df.snapshot_date,
+            df.day AS date_demand_forecasted_for,
+            df.qty_final AS qty_forecasted,
+            ROW_NUMBER() OVER (PARTITION BY bb.visit_day, bb.product_id, bb.inventory_id ORDER BY df.snapshot_date ASC) AS rn
+        FROM 
+            dwd.df_demand_forecast_daily_snapshot63 df
+        INNER JOIN 
+            dwd.wms_inv_sales_mapping ism ON df.sales_org_id = ism.sales_org_id
+        INNER JOIN 
+            bb_sku_list bb ON bb.product_id = df.product_id 
+                AND bb.inventory_id = ism.warehouse_number 
+                AND bb.visit_day = df.day
+        LEFT JOIN 
+            dwd.irs_network_product_calculation irs 
+            ON irs.product_id = bb.product_id 
+            AND irs.facility_id = bb.inventory_id 
+            AND irs.snapshot_date = bb.visit_day
+        WHERE 
+            df.qty_final IS NOT NULL
+),
+forecast_backup as (
+    SELECT 
+        visit_day,
+        product_id,
+        inventory_id,
+        MIN(sales_org_id) AS sales_org_id,
+        MIN(final_planning_horizon_days) AS final_planning_horizon_days,
+        MIN(snapshot_date) AS snapshot_date,  -- Get the minimum (earliest) snapshot_date
+        MIN(date_demand_forecasted_for) AS date_demand_forecasted_for,
+        MIN(qty_forecasted) AS qty_forecasted
+    FROM 
+        forecast_prep_backup
+    WHERE 
+        rn = 1  -- Only select the row with the lowest snapshot_date
+    GROUP BY 
+        visit_day, product_id, inventory_id
+)
+SELECT 
+    bb.visit_day,
+    bb.product_id,
+    bb.inventory_id,
+    bb.purchase_method,
+    bb.inventory_title,
+    bb.storage_type,
+    bb.core_flag,
+    bb.purchase_status_desc,
+    bb.division,
+    bb.category,
+    bb.product_title_en as short_title_en,
+    bb.sub_category,
+    bb.sku_owner,
+    bb.product_ethnicity,
+    coalesce(sl.sold_qty,0) as sold_qty, coalesce(sl.revenue,0) as revenue,
+    coalesce(df.qty_forecasted,fb.qty_forecasted,0) as lead_time_adjusted_df_forecast,
+    coalesce(rm.product_refund_amount,0) as product_refund_amount, 
+    rm.gm_margin,
+    rm.gm_base,
+    r.avg_6wk_cogs AS rolling_6_wk_avg_cogs,
+    d.avg_wkly_inv AS rolling_6_wk_avg_inv,
+    bbp.cost_per_unit as bb_sku_cost_per_unit,
+    irs.final_planning_horizon_days,
+    irs_bb.final_planning_horizon_days as only_bb_final_planning_horizon_days,
+    irs.aggregated_cycle_stock,irs.aggregated_safety_stock,irs.target_quantity,
+    irs.order_quantity,irs.sellable_quantity,irs.available_quantity,
+    irs.avg_daily_demand_forecast,irs.avg_daily_sales,irs.shelf_life_days
+FROM bb_sku_list bb
+left join  daily_snapshot_turns d 
+    ON bb.product_id = d.product_id 
+    AND bb.inventory_id = d.inventory_id
+    and bb.visit_day = d.snapshot_date
+left JOIN rolling_6wk_cogs_by_snapshot r 
+    ON bb.product_id = r.product_id 
+    AND bb.inventory_id = r.inventory_id 
+    and bb.visit_Day = r.snapshot_date
+left join bb_sku_price bbp on
+bbp.product_id = bb.product_id and bbp.inventory_id = bb.inventory_id and bbp.visit_day = bb.visit_day 
+left join refund_margin rm on bb.product_id = rm.product_id and rm.inventory_id = bb.inventory_id and rm.visit_day = bb.visit_day
+left join sales sl on bb.product_id = sl.product_id and bb.inventory_id = sl.inventory_id and bb.visit_day = sl.visit_day
+left join lead_time_adjusted_df df on bb.product_id = df.product_id and bb.inventory_id = df.inventory_id and bb.visit_day = df.visit_day 
+left join forecast_backup fb on bb.product_id = fb.product_id and bb.inventory_id = fb.inventory_id and bb.visit_day = fb.visit_day
+LEFT JOIN dwd.irs_network_product_calculation irs 
+    ON irs.product_id = bb.product_id 
+    AND irs.snapshot_date = bb.visit_day 
+    AND (
+        CASE 
+            WHEN irs.facility_id = 33 THEN 16
+            WHEN irs.facility_id = 37 THEN 7
+            ELSE irs.facility_id 
+        END = bb.inventory_id)
+LEFT JOIN dwd.irs_network_product_calculation irs_bb
+    ON irs_bb.product_id = bb.product_id 
+    AND irs_bb.snapshot_date = bb.visit_day 
+    AND (
+        CASE 
+            WHEN irs_bb.facility_id = 33 THEN 16
+            WHEN irs_bb.facility_id = 37 THEN 7
+            ELSE irs_bb.facility_id 
+        END = bb.inventory_id 
+    and irs_bb.purchase_method = 'BULK_BUY'
+    and irs_bb.snapshot_date >= '2025-02-08'
+    )
