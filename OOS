@@ -1,0 +1,3965 @@
+
+ drop table if exists mdse_product_warehouse;
+create  temporary table mdse_product_warehouse as
+ select
+ id, product_id, is_purchase, case when inventory_id = 33 then 16 when inventory_id = 37 then 7 else inventory_id end as inventory_id,
+ inventory_title, primary_vendor_id, primary_vendor_title, secondary_vendor_id, supply_chain_analyst_id, 
+ supply_chain_analyst_name, is_forward_buy, outl, purchase_status, purchase_status_desc, live_code, dnr_code, next_delivery_date, assortment_role, core_sku_flag, dc_sku_flag,
+ purchase_method, testing_period, waiting_to_null, rotation_status, frozen_end_time
+  from dwd.mdse_product_warehouse ;
+
+ 
+  drop table if exists   irs_network_product_calculation ;
+create temporary table   irs_network_product_calculation as
+ select
+ collection_id, calculation_id, calculation_timestamp, snapshot_date,  case when facility_id = 33 then 16 when facility_id = 37 then 7 else facility_id end as facility_id
+ , facility_name, product_id, product_eng_title, storage_type, tier, ethnicity, purchase_status,
+ purchase_method, initial_planning_horizon_days, final_planning_horizon_days, aggregated_cycle_stock, aggregated_safety_stock, shelf_life_days, shelf_life_receiving_limit_days, 
+ shelf_life_outbound_limit_days, avg_til_weeks_of_supply, avg_daily_demand_forecast, avg_daily_sales, target_quantity, order_quantity, available_quantity, sellable_quantity,
+ open_total_transfer_product_quantity, open_total_purchase_order_product_quantity, is_planning_horizon_extended, is_order_quantity_satisfied_by_primary_lane
+from
+   dwd.irs_network_product_calculation;
+  
+   drop table if exists   irs_network_purchase_order_product ;
+create temporary table irs_network_purchase_order_product as 
+select 
+case when facility_id = 33 then 16 when facility_id = 37 then 7 else facility_id end as facility_id, product_id, vendor_id, vendor_name,
+snapshot_date, order_quantity, estimated_pallets, order_date, delivery_date, cost, 
+submission_status, submission_status_reason, submitted_quantity, purchase_request_id
+from dwd.irs_network_purchase_order_product;
+
+  drop table if exists dc_schedule_details_v7 ;
+create temporary table  dc_schedule_details_v7 as
+ select
+ case when dc_id = 33 then 16 when dc_id = 37 then 7 else dc_id end as dc_id, dc_name, 
+case when fc_id = 33 then 16 when fc_id = 37 then 7 else fc_id end as fc_id, 
+ fc_name, storage_type, priority, review_day_of_week_1, review_day_of_week_2, order_day_of_week, pickup_day_of_week,
+delivery_day_of_week, week_add_review_day_of_week_1, week_add_review_day_of_week_2, week_add_order_day_of_week, week_add_pickup_day_of_week, 
+week_add_delivery_day_of_week, pickup_date_days_from_delivery, order_date_days_from_delivery, review_2_date_days_from_delivery, review_1_date_days_from_delivery,
+tag_pair, tag_pair_binary
+from
+  sandbox.dc_schedule_details_v7 ;
+
+   drop table if exists sc_inventory_version  ;
+create temporary table sc_inventory_version as
+ select record_date, sales_day, 
+  case when warehouse_number = '33' then '16' when warehouse_number = '37' then '7' else warehouse_number  end as warehouse_number,
+product_id, available_qty
+ from dwd.sc_inventory_version ; 
+  
+ 
+
+   drop table if exists inventory_location_historical  ;
+create temporary table inventory_location_historical  as
+ (select
+  case when warehouse_number = '33' then '16' when warehouse_number = '37' then '7' else warehouse_number  end as warehouse_number,
+  warehouse_title, product_id, product_name, location_no, qty, expire_date, storage_type, department, catalogue_num, catalogue_title,
+ sub_catalogue_num, sub_catalogue_title, short_title, short_title_en, product_volume, location_type, location_volume, storage_temperature_zone, check_shelf_life, 
+ expire_dtm, update_date, size_id, location_item_count, case_volume, spec, box_counts, total_product_volume
+ from 
+metrics.inventory_location_historical );
+
+   drop table if exists sc_pr_config_delivery_calendar;
+create temporary table  sc_pr_config_delivery_calendar as
+(select 
+id, vendor_id, case when inventory_id = 33 then 16 when inventory_id = 37 then 7 else inventory_id end as inventory_id, storage_type, order_weekday, 
+frequency, order_cycle, lead_time_connection, eta_connection_weekday, eta_connection_addweek, lead_time, 
+eta_final_weekday, eta_final_addweek, status, rec_creator_id, rec_create_time, rec_update_time, quantity, quantity_dollar, quantity_weight_in_lbs, quantity_case, quantity_pallet
+from dwd.sc_pr_config_delivery_calendar );
+
+
+  
+  drop table if exists inventory ;
+create temporary table inventory  as
+ (select case when inventory_id = 33 then 16 when inventory_id = 37 then 7 else inventory_id end as inventory_id, inventory_type, inventory_type_title, 
+ inventory_title, sales_org_id, sales_org_title, sales_region_id, sales_region_title, plant_code, status,
+  description, address, latitude, longitude, dry_inventory_id, ref_inventory_id, real_inventory_id, support_wms, fully_support_wms, support_internal, support_inbound, support_relex, 
+  inventory_location
+  from  dim.inventory);
+  
+   drop table if exists wms_inv_sales_mapping ;
+create temporary table  wms_inv_sales_mapping  as
+   select rec_id,  case when warehouse_number = '33' then '16' when warehouse_number = '37' then '7' else warehouse_number  end as warehouse_number,
+   warehouse_title, sales_org_id, sales_org_title, work_type, transport_time, in_user, edit_user, 
+   storage_type, in_dtm, edit_dtm,  case when physical_warehouse_number = '33' then '16' when physical_warehouse_number = '37' then '7'
+   else physical_warehouse_number  end as physical_warehouse_number
+   from dwd.wms_inv_sales_mapping;
+   
+     drop table if exists wms_invoice_internal;
+create temporary table wms_invoice_internal  as
+   select id, order_id, markout_date, eta_date, storage_type, invoice_id, 
+  case when warehouse_num = 33 then 16 when warehouse_num = 37 then 7 else warehouse_num  end as warehouse_num 
+  , case when target_warehouse_num = 33 then 16 when target_warehouse_num = 37 then 7 else target_warehouse_num  end as target_warehouse_num , rec_creator_id, rec_create_time, rec_update_time, 
+   out_system, in_system, is_send_email
+ from dwd.wms_invoice_internal;
+   
+    drop table if exists sc_pr_config_inventory_relation;
+create temporary table sc_pr_config_inventory_relation  as
+  select id, vendor_id, case when inventory_id = 33 then 16 when inventory_id = 37 then 7 else inventory_id end as inventory_id, storage_type, supply_mode, 
+   case when connection_inventory_id = 33 then 16 when connection_inventory_id = 37 then 7 else connection_inventory_id end as connection_inventory_id
+ ,connection_inventory_type
+ from  dwd.sc_pr_config_inventory_relation  ;
+
+     drop table if exists sc_pr_config_dedicated_relation;
+create temporary table sc_pr_config_dedicated_relation as
+select 
+id, vendor_id, dedicated_user_id, storage_type, timezone, 
+case when warehouse_id = 33 then 16 when warehouse_id = 37 then 7 else warehouse_id end as warehouse_id, ethnicity_str
+from  dwd.sc_pr_config_dedicated_relation ;
+ 
+ drop table if exists pr_purchase_request;
+create temporary table pr_purchase_request as
+select id, case when inventory_id = 33 then 16 when inventory_id = 37 then 7 else inventory_id end as inventory_id, 
+case when connection_inventory_id = 33 then 16 when connection_inventory_id = 37 then 7 else connection_inventory_id end as connection_inventory_id, connection_inventory_type, vendor_id, product_id, qty, quantity_per_unit, ethnicity, storage_type, calendar_type, order_date,
+eta_connection_date, eta_final_date, status, source, auto_proposal, po_id, rec_creator_id, rec_create_time, rec_update_time
+  from  dwd.pr_purchase_request;
+ 
+   drop table if exists dc_schedule_details_v6;
+create temporary table dc_schedule_details_v6 as
+ select 
+  case when dc_id = 33 then 16 when dc_id = 37 then 7 else dc_id end as dc_id,
+  dc_name, case when fc_id = 33 then 16 when fc_id = 37 then 7 else fc_id end as fc_id, fc_name, storage_type, priority, review_day_of_week_1, review_day_of_week_2, order_day_of_week, pickup_day_of_week, delivery_day_of_week, week_add_review_day_of_week_1,
+ week_add_review_day_of_week_2, week_add_order_day_of_week, week_add_pickup_day_of_week, week_add_delivery_day_of_week, pickup_date_days_from_delivery, 
+ order_date_days_from_delivery, review_2_date_days_from_delivery, review_1_date_days_from_delivery, tag_pair, tag_pair_binary
+ from sandbox.dc_schedule_details_v6 ;
+   
+drop table if exists availability_zero;
+create temporary table availability_zero as
+select pa.product_id,pa.inventory_id,pa.visit_day,pa.storage_type,pa.primary_vendor,
+pa.primary_vendor_title,pa.purchase_method,sum(available) as available
+from metrics.product_availability pa
+left join mdse_product_warehouse mpw on
+pa.product_id = mpw.product_id and
+pa.inventory_id = mpw.inventory_id
+where available = 0 and visit_day =        '2026-01-15'-1 and pa.dc_sku_flag=1
+group by 1,2,3,4,5,6,7;
+
+
+DROP TABLE IF EXISTS product_price;
+CREATE TEMPORARY TABLE product_price AS (
+WITH ranked_prices AS (
+select
+pa.product_id,
+pa.inventory_id,
+pa.visit_day,
+pa.storage_type,
+pa.primary_vendor,
+pa.primary_vendor_title,
+pa.purchase_method,
+pri.price,
+ROW_NUMBER() OVER (PARTITION BY pa.product_id, pri.sales_org_id ORDER BY pri.id DESC) AS row_num
+FROM
+metrics.product_availability pa
+LEFT JOIN
+dwd.mdse_product_price pri
+ON pa.product_id = pri.product_id
+AND pa.sales_org_id = pri.sales_org_id
+WHERE
+pa.visit_day =        '2026-01-15'-1
+)
+SELECT
+product_id,
+inventory_id,
+visit_day,
+storage_type,
+primary_vendor,
+primary_vendor_title,
+purchase_method,
+AVG(price) AS price
+FROM
+ranked_prices
+WHERE
+row_num = 1
+GROUP BY
+product_id, inventory_id, visit_day, storage_type, primary_vendor, primary_vendor_title, purchase_method
+);
+
+DROP TABLE IF EXISTS last_available_input;
+CREATE TEMPORARY TABLE last_available_input AS (
+WITH last_available AS (
+select
+--CASE
+--WHEN inventory_id = 16 THEN 33
+--WHEN inventory_id = 7 THEN 37
+--ELSE inventory_id
+--END AS
+inventory_id,
+a.product_id,
+MAX(a.visit_day) AS last_available_date,
+MAX(a.product_sale_status_title) as product_sale_status_title,
+MAX(irs.target_quantity) as target_quantity,
+max(irs.sellable_quantity) as sellable_quantity,
+max(irs.order_quantity) as order_quantity,
+MAX(irs.avg_daily_sales) as avg_daily_sales,
+MAX(irs.avg_daily_demand_forecast) as avg_daily_demand_forecast
+FROM metrics.product_availability a
+LEFT JOIN dwd.mdse_product b ON a.product_id = b.product_id
+LEFT JOIN   wms_inv_sales_mapping c ON a.sales_org_id = c.sales_org_id AND b.storage_type = c.storage_type
+left join   irs_network_product_calculation irs on a.product_id = irs.product_id and a.inventory_id = irs.facility_id and a.visit_day = irs.snapshot_date
+WHERE a.available > 0 and a.visit_day <=        '2026-01-15'-1
+GROUP BY a.inventory_id, a.product_id
+)
+SELECT *
+FROM last_available
+);
+
+
+DROP TABLE IF EXISTS dc_transfer_schedule_a;
+CREATE TEMPORARY TABLE dc_transfer_schedule_a AS (
+WITH max_delivery_date_cte AS (
+SELECT
+CASE
+WHEN sd.dc_id = 33 THEN 16
+WHEN sd.dc_id = 37 THEN 7
+ELSE sd.dc_id
+END AS dc_id,
+sd.dc_name,
+case when sd.fc_id = 33 then 16
+when sd.fc_id = 37 then 7
+else sd.fc_id
+end as fc_id,
+sd.fc_name,
+sd.storage_type,
+sd.tag_pair,
+sd.tag_pair_binary,
+sd.priority,
+sd.review_day_of_week_1,
+sd.review_day_of_week_2,
+sd.order_day_of_week,
+sd.pickup_day_of_week,
+sd.delivery_day_of_week,
+sd.pickup_date_days_from_delivery,
+sd.order_date_days_from_delivery,
+sd.review_2_date_days_from_delivery,
+sd.review_1_date_days_from_delivery,
+-- Find the max delivery date from dim.calendar based on the day_of_week matching
+MAX(c.cal_date) AS max_delivery_date
+FROM
+sandbox.dc_schedule_details_v7 sd
+JOIN dim.calendar c
+ON c.day_of_week = sd.delivery_day_of_week
+WHERE
+c.cal_date BETWEEN        '2026-01-15'-1 - 30 and        '2026-01-15'-1
+GROUP BY
+sd.dc_id, sd.dc_name, sd.fc_id, sd.fc_name, sd.storage_type, sd.priority,
+sd.review_day_of_week_1, sd.review_day_of_week_2, sd.order_day_of_week,
+sd.pickup_day_of_week, sd.delivery_day_of_week,
+sd.pickup_date_days_from_delivery, sd.order_date_days_from_delivery,
+sd.review_2_date_days_from_delivery, sd.review_1_date_days_from_delivery,sd.tag_pair,sd.tag_pair_binary
+)
+
+-- Step 2: Join back to get the days from the max delivery date and calculate all other dates
+SELECT
+mdd.dc_id,
+mdd.dc_name,
+mdd.fc_id,
+mdd.fc_name,
+mdd.storage_type,
+mdd.tag_pair,
+mdd.tag_pair_binary,
+mdd.priority,
+mdd.max_delivery_date-1 AS delivery_date,
+-- Calculate the other dates by subtracting days from the max delivery date
+mdd.max_delivery_date - sd.pickup_date_days_from_delivery-1 AS pickup_date,
+mdd.max_delivery_date - sd.order_date_days_from_delivery-1 AS order_date,
+mdd.max_delivery_date - sd.review_1_date_days_from_delivery-1 AS review_1_date,
+mdd.max_delivery_date - sd.review_2_date_days_from_delivery-1 AS review_2_date
+
+FROM
+max_delivery_date_cte mdd
+
+-- Rejoin the original table to get the day offsets
+JOIN   dc_schedule_details_v7 sd
+ON (
+CASE
+WHEN sd.dc_id = 33 THEN 16
+WHEN sd.dc_id = 37 THEN 7
+ELSE sd.dc_id
+END
+) = (
+CASE
+WHEN mdd.dc_id = 33 THEN 16
+WHEN mdd.dc_id = 37 THEN 7
+ELSE mdd.dc_id
+END
+)
+AND (
+CASE
+WHEN sd.fc_id = 33 THEN 16
+WHEN sd.fc_id = 37 THEN 7
+ELSE sd.fc_id
+END
+) = (
+CASE
+WHEN mdd.fc_id = 33 THEN 16
+WHEN mdd.fc_id = 37 THEN 7
+ELSE mdd.fc_id
+END
+)
+AND sd.storage_type = mdd.storage_type
+AND sd.priority = mdd.priority
+);
+
+DROP TABLE IF EXISTS dc_transfer_schedule;
+CREATE TEMPORARY TABLE dc_transfer_schedule AS (
+WITH ranked_schedule AS (
+SELECT
+*,
+ROW_NUMBER() OVER (
+PARTITION BY fc_id, dc_id, storage_type, priority
+ORDER BY ABS(EXTRACT(EPOCH FROM (delivery_date - ('2026-01-15' - INTERVAL '1 day')))) ASC
+) AS row_num
+FROM
+dc_transfer_schedule_a
+)
+SELECT *
+FROM ranked_schedule
+WHERE row_num = 1
+);
+
+DROP TABLE IF EXISTS dc_sku_transfer_schedule_a;
+CREATE TEMPORARY TABLE dc_sku_transfer_schedule_a AS (
+WITH dc_sku_transfer_schedule_a AS (
+SELECT
+az.product_id,
+dts.tag_pair_binary AS facility_level_tag_pair,
+ftp.facility_tag_pair AS sku_level_tag_pair,
+dts.priority,
+case when az.inventory_id = 33 then 16
+when az.inventory_id = 37 then 7
+else az.inventory_id
+end as inventory_id,
+az.storage_type,
+dts.dc_name,
+case when dts.dc_id = 33 then 16
+when dts.dc_id = 37 then 7
+else dc_id
+end as dc_id,
+dts.review_1_date,
+dts.review_2_date,
+dts.order_date,
+dts.pickup_date,
+dts.delivery_date
+FROM
+availability_zero az
+LEFT JOIN
+dc_transfer_schedule dts
+ON CASE
+WHEN az.inventory_id = 33 THEN 16
+WHEN az.inventory_id = 37 THEN 7
+ELSE az.inventory_id
+END = CASE
+WHEN dts.fc_id = 33 THEN 16
+WHEN dts.fc_id = 37 THEN 7
+ELSE dts.fc_id
+END
+AND (
+(az.storage_type = 'F' AND dts.storage_type = 'Frozen') OR
+(az.storage_type = 'N' AND dts.storage_type = 'Dry') OR
+(az.storage_type = 'R' AND dts.storage_type = 'Fresh')
+)
+LEFT JOIN sandbox.facility_tag_pair_sku ftp
+ON az.product_id = ftp.product_id AND dts.tag_pair = ftp.facility_tag_pair
+),
+dc_sku_transfer_schedule_with_dc_name AS (
+-- Now use the CTE (dc_sku_transfer_schedule_a) directly for the CASE logic
+SELECT
+product_id,
+inventory_id,
+storage_type,
+priority,
+facility_level_tag_pair,
+sku_level_tag_pair,
+-- Creating dc_name with CASE logic
+CASE
+WHEN priority = 1 AND facility_level_tag_pair = 0 THEN dc_name
+WHEN priority = 1 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN dc_name
+WHEN priority = 2 AND facility_level_tag_pair = 0 THEN dc_name
+WHEN priority = 2 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN dc_name
+WHEN priority = 3 AND facility_level_tag_pair = 0 THEN dc_name
+WHEN priority = 3 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN dc_name
+WHEN priority = 4 AND facility_level_tag_pair = 0 THEN dc_name
+WHEN priority = 4 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN dc_name
+ELSE NULL -- Adding a default NULL case to ensure we filter unwanted rows
+END AS priority_1_dc_name,
+CASE
+WHEN priority = 1 AND facility_level_tag_pair = 0 THEN dc_id
+WHEN priority = 1 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN dc_id
+WHEN priority = 2 AND facility_level_tag_pair = 0 THEN dc_id
+WHEN priority = 2 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN dc_id
+WHEN priority = 3 AND facility_level_tag_pair = 0 THEN dc_id
+WHEN priority = 3 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN dc_id
+WHEN priority = 4 AND facility_level_tag_pair = 0 THEN dc_id
+WHEN priority = 4 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN dc_id
+ELSE NULL -- Adding a default NULL case to ensure we filter unwanted rows
+END AS priority_1_dc_id,
+CASE
+WHEN priority = 1 AND facility_level_tag_pair = 0 THEN review_1_date
+WHEN priority = 1 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN review_1_date
+WHEN priority = 2 AND facility_level_tag_pair = 0 THEN review_1_date
+WHEN priority = 2 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN review_1_date
+WHEN priority = 3 AND facility_level_tag_pair = 0 THEN review_1_date
+WHEN priority = 3 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN review_1_date
+WHEN priority = 4 AND facility_level_tag_pair = 0 THEN review_1_date
+WHEN priority = 4 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN review_1_date
+ELSE NULL -- Adding a default NULL case to ensure we filter unwanted rows
+END AS priority_1_dc_review_date_1,
+CASE
+WHEN priority = 1 AND facility_level_tag_pair = 0 THEN review_2_date
+WHEN priority = 1 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN review_2_date
+WHEN priority = 2 AND facility_level_tag_pair = 0 THEN review_2_date
+WHEN priority = 2 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN review_2_date
+WHEN priority = 3 AND facility_level_tag_pair = 0 THEN review_2_date
+WHEN priority = 3 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN review_2_date
+WHEN priority = 4 AND facility_level_tag_pair = 0 THEN review_2_date
+WHEN priority = 4 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN review_2_date
+ELSE NULL -- Adding a default NULL case to ensure we filter unwanted rows
+END AS priority_1_dc_review_date_2,
+CASE
+WHEN priority = 1 AND facility_level_tag_pair = 0 THEN order_date
+WHEN priority = 1 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN order_date
+WHEN priority = 2 AND facility_level_tag_pair = 0 THEN order_date
+WHEN priority = 2 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN order_date
+WHEN priority = 3 AND facility_level_tag_pair = 0 THEN order_date
+WHEN priority = 3 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN order_date
+WHEN priority = 4 AND facility_level_tag_pair = 0 THEN order_date
+WHEN priority = 4 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN order_date
+ELSE NULL -- Adding a default NULL case to ensure we filter unwanted rows
+END AS priority_1_dc_order_date,
+CASE
+WHEN priority = 1 AND facility_level_tag_pair = 0 THEN pickup_date
+WHEN priority = 1 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN pickup_date
+WHEN priority = 2 AND facility_level_tag_pair = 0 THEN pickup_date
+WHEN priority = 2 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN pickup_date
+WHEN priority = 3 AND facility_level_tag_pair = 0 THEN pickup_date
+WHEN priority = 3 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN pickup_date
+WHEN priority = 4 AND facility_level_tag_pair = 0 THEN pickup_date
+WHEN priority = 4 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN pickup_date
+ELSE NULL -- Adding a default NULL case to ensure we filter unwanted rows
+END AS priority_1_dc_pickup_date,
+CASE
+WHEN priority = 1 AND facility_level_tag_pair = 0 THEN delivery_date
+WHEN priority = 1 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN delivery_date
+WHEN priority = 2 AND facility_level_tag_pair = 0 THEN delivery_date
+WHEN priority = 2 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN delivery_date
+WHEN priority = 3 AND facility_level_tag_pair = 0 THEN delivery_date
+WHEN priority = 3 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN delivery_date
+WHEN priority = 4 AND facility_level_tag_pair = 0 THEN delivery_date
+WHEN priority = 4 AND facility_level_tag_pair = 1 AND sku_level_tag_pair IS NOT NULL THEN delivery_date
+ELSE NULL -- Adding a default NULL case to ensure we filter unwanted rows
+END AS priority_1_dc_delivery_date
+FROM dc_sku_transfer_schedule_a
+),
+dc_sku_transfer_schedule_final AS (
+-- Filtering rows where dc_name is not null after the CASE logic
+SELECT *
+FROM dc_sku_transfer_schedule_with_dc_name
+WHERE priority_1_dc_name IS NOT NULL
+)
+
+-- Final selection from the last CTE
+SELECT product_id,inventory_id,storage_type,priority,facility_level_tag_pair,sku_level_tag_pair,priority_1_dc_name,priority_1_dc_id,priority_1_dc_review_date_1,priority_1_dc_review_date_2,priority_1_dc_order_date,priority_1_dc_pickup_date,priority_1_dc_delivery_date
+FROM dc_sku_transfer_schedule_final
+);
+
+DROP TABLE IF EXISTS dc_sku_transfer_schedule;
+CREATE TEMPORARY TABLE dc_sku_transfer_schedule AS (
+SELECT
+product_id,
+inventory_id,
+storage_type,
+priority,
+facility_level_tag_pair,
+sku_level_tag_pair,
+priority_1_dc_name,
+priority_1_dc_id,
+priority_1_dc_review_date_1,
+priority_1_dc_review_date_2,
+priority_1_dc_order_date,
+priority_1_dc_pickup_date,
+priority_1_dc_delivery_date
+FROM (
+SELECT
+product_id,
+inventory_id,
+storage_type,
+priority,
+facility_level_tag_pair,
+sku_level_tag_pair,
+priority_1_dc_name,
+priority_1_dc_id,
+priority_1_dc_review_date_1,
+priority_1_dc_review_date_2,
+priority_1_dc_order_date,
+priority_1_dc_pickup_date,
+priority_1_dc_delivery_date,
+ROW_NUMBER() OVER (PARTITION BY product_id, inventory_id ORDER BY priority) AS row_num
+FROM dc_sku_transfer_schedule_a
+) AS subquery
+WHERE row_num = 1
+);
+
+
+
+
+DROP TABLE IF EXISTS sellable_dc_sku;
+CREATE TEMPORARY TABLE sellable_dc_sku AS (
+SELECT
+dc_sku.product_id,
+dc_sku.inventory_id,
+dc_sku.storage_type,
+dc_sku.sku_level_tag_pair,
+dc_sku.facility_level_tag_pair,
+
+-- Priority 1 Columns
+CASE
+WHEN dc_sku.priority_1_dc_id = 33 THEN 16
+WHEN dc_sku.priority_1_dc_id = 37 THEN 7
+ELSE dc_sku.priority_1_dc_id
+END AS priority_1_dc_id,
+dc_sku.priority_1_dc_name,
+dc_sku.priority_1_dc_review_date_1,
+dc_sku.priority_1_dc_review_date_2,
+dc_sku.priority_1_dc_order_date,
+dc_sku.priority_1_dc_pickup_date,
+dc_sku.priority_1_dc_delivery_date,
+MAX(CASE
+WHEN inv.record_date = dc_sku.priority_1_dc_order_date THEN inv.available_qty
+END) AS priority_1_sellable_qty
+
+FROM
+dc_sku_transfer_schedule dc_sku
+LEFT JOIN
+ sc_inventory_version inv
+ON
+dc_sku.product_id = inv.product_id
+AND dc_sku.priority_1_dc_id = inv.warehouse_number
+GROUP BY
+dc_sku.product_id,
+dc_sku.inventory_id,
+dc_sku.storage_type,
+dc_sku.priority_1_dc_id, dc_sku.priority_1_dc_name, dc_sku.priority_1_dc_review_date_1,
+dc_sku.priority_1_dc_review_date_2, dc_sku.priority_1_dc_order_date, dc_sku.priority_1_dc_pickup_date,
+dc_sku.priority_1_dc_delivery_date,
+dc_sku.sku_level_tag_pair,
+dc_sku.facility_level_tag_pair
+);
+
+drop table if exists bin_inventory;
+create temporary table bin_inventory as (
+select distinct sku.product_id, sku.inventory_id,sku.priority_1_dc_id ,priority_1_dc_order_date, his.location_type,coalesce(sum(his.qty),0) as qty
+from sellable_dc_sku sku
+left join  inventory_location_historical his on
+sku.product_id = his.product_id and sku.priority_1_dc_id = his.warehouse_number and his.update_date = priority_1_dc_order_date
+where location_type = 'Bin'
+group by 1,2,3,4,5
+);
+
+drop table if exists stock_inventory;
+create temporary table stock_inventory as (
+select distinct sku.product_id, sku.inventory_id,sku.priority_1_dc_id ,priority_1_dc_order_date, his.location_type,coalesce(sum(his.qty),0) as qty
+from sellable_dc_sku sku
+left join  inventory_location_historical his on
+sku.product_id = his.product_id and sku.priority_1_dc_id = his.warehouse_number and his.update_date = priority_1_dc_order_date
+where location_type = 'Stock'
+group by 1,2,3,4,5
+);
+
+drop table if exists Delivery_Calendar_Supplier_DC_a ;
+create temporary table Delivery_Calendar_Supplier_DC_a as (
+WITH RECURSIVE NS (n) AS (
+SELECT 1
+UNION ALL
+SELECT n + 1
+FROM NS
+WHERE n < 52)
+, t1 as (
+select
+distinct
+b.vendor_id
+, d.product_id
+, bb.ref_inventory_id as inventory_id
+, b.storage_type
+, TRIM(
+SPLIT_PART(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',', NS.n)) :: int AS order_week
+, b.lead_time
+, c.week_begin_date + b.order_weekday as order_date
+, c.week_begin_date + b.order_weekday + b.lead_time as delivery_date
+from NS
+inner join
+(select
+distinct
+a.vendor_id
+, a.inventory_id,
+split_part(a.storage_type, ',', s.id) as storage_type
+, a.order_weekday
+, a.frequency
+, a.lead_time
+, a.order_cycle
+from  sc_pr_config_delivery_calendar a
+, (select 1 as id union all select 2 union all select 3 union all select 4) s
+where 1=1
+and a.status = 'A'
+and split_part(a.storage_type, ',', s.id) != '') b
+on length(b.order_cycle) > 2
+and NS.n <= REGEXP_COUNT(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',') + 1
+and length(b.order_cycle) > 2
+left join  inventory bb
+on b.inventory_id = bb.inventory_id
+left join
+(select
+distinct
+week_begin_date
+, full_week_number
+from dim.calendar
+where year_id = 2025
+and day_of_week > 0
+and cal_date not in ('2023-01-01', '2023-12-31')) c
+on c.full_week_number
+=
+(TRIM(
+SPLIT_PART(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',', NS.n)) :: int)
+left join (select a.*, b.storage_type from mdse_product_warehouse a left join dwd.mdse_product b using(product_id)) d
+on b.inventory_id = d.inventory_id
+and b.vendor_id = d.primary_vendor_id
+and b.storage_type = d.storage_type
+)
+select
+t1.*,
+mpw.purchase_method,
+sku.priority_1_dc_order_date,
+sku.priority_1_dc_id
+, row_number() over(partition by t1.inventory_id, t1.product_id order by order_date desc) as rn_order
+, row_number() over(partition by t1.inventory_id, t1.product_id order by delivery_date desc) as rn_delivery
+from t1
+left join dc_sku_transfer_schedule sku on t1.product_id = sku.product_id and t1.inventory_id = sku.inventory_id
+left join mdse_product_warehouse mpw on t1.product_id = mpw.product_id and t1.inventory_id = mpw.inventory_id
+where
+--order_date <        '2026-01-15'-1
+delivery_date <= priority_1_dc_order_date or delivery_date is null or priority_1_dc_order_date is null
+);
+
+
+drop table if exists Delivery_Calendar_Supplier_DC;
+create temporary table Delivery_Calendar_Supplier_DC as
+(select ord.vendor_id,ord.product_id,ord.inventory_id,ord.storage_type,ord.purchase_method,order_week,lead_time,order_date as supplier_to_dc_order_date,delivery_date as supplier_to_dc_delivery_date,
+priority_1_dc_order_date,priority_1_dc_id,rn_order,rn_delivery
+from Delivery_Calendar_Supplier_DC_a ord
+where rn_order = 1 and
+priority_1_dc_order_date is not null);
+
+DROP TABLE IF EXISTS available_date_adjusted_df_a;
+CREATE TEMPORARY TABLE available_date_adjusted_df_a AS (
+WITH ranked_data AS (
+SELECT
+df.product_id,
+ism.warehouse_number AS inventory_id,
+df.snapshot_date,
+sku.priority_1_dc_order_date AS order_date,
+lai.last_available_date,
+df.day AS date_demand_forecasted_for,
+df.qty_final,
+ROW_NUMBER() OVER (PARTITION BY df.product_id, ism.warehouse_number ORDER BY df.snapshot_date DESC) AS rn
+FROM dwd.df_demand_forecast_daily_snapshot63 df
+INNER JOIN   wms_inv_sales_mapping ism
+ON df.sales_org_id = ism.sales_org_id
+INNER JOIN last_available_input lai
+ON lai.product_id = df.product_id
+AND lai.inventory_id = ism.warehouse_number
+AND lai.last_available_date = df.day
+LEFT JOIN sellable_dc_sku sku
+ON lai.product_id = sku.product_id
+AND lai.inventory_id = sku.inventory_id
+WHERE
+lai.last_available_date > sku.priority_1_dc_order_date
+AND df.snapshot_date < sku.priority_1_dc_order_date
+)
+SELECT
+product_id,
+inventory_id,
+max(snapshot_date) AS snapshot_date, -- Get the most recent snapshot_date
+max(order_date) AS order_date,
+max(last_available_date) AS last_available_date,
+max(date_demand_forecasted_for) AS date_demand_forecasted_for,
+max(CASE WHEN rn = 1 THEN qty_final ELSE NULL END) AS qty_forecasted -- Select qty_final for the most recent snapshot
+FROM ranked_data
+WHERE rn = 1 -- Only pick the most recent row for each product and inventory
+GROUP BY product_id, inventory_id
+);
+
+DROP TABLE IF EXISTS available_date_adjusted_df_b;
+CREATE TEMPORARY TABLE available_date_adjusted_df_b AS (
+WITH ranked_data AS (
+SELECT
+df.product_id,
+ism.warehouse_number AS inventory_id,
+df.snapshot_date,
+sku.priority_1_dc_order_date AS order_date,
+lai.last_available_date,
+df.day AS date_demand_forecasted_for,
+df.qty_final,
+ROW_NUMBER() OVER (PARTITION BY df.product_id, ism.warehouse_number ORDER BY df.snapshot_date DESC) AS rn
+FROM dwd.df_demand_forecast_daily_snapshot63 df
+INNER JOIN   wms_inv_sales_mapping ism
+ON df.sales_org_id = ism.sales_org_id
+INNER JOIN last_available_input lai
+ON lai.product_id = df.product_id
+AND lai.inventory_id = ism.warehouse_number
+AND lai.last_available_date = df.day
+LEFT JOIN sellable_dc_sku sku
+ON lai.product_id = sku.product_id
+AND lai.inventory_id = sku.inventory_id
+WHERE
+lai.last_available_date < sku.priority_1_dc_order_date
+AND df.snapshot_date < lai.last_available_date - 7
+)
+SELECT
+product_id,
+inventory_id,
+max(snapshot_date) AS snapshot_date, -- Get the most recent snapshot_date
+max(order_date) AS order_date,
+max(last_available_date) AS last_available_date,
+max(date_demand_forecasted_for) AS date_demand_forecasted_for,
+max(CASE WHEN rn = 1 THEN qty_final ELSE NULL END) AS qty_forecasted -- Select qty_final for the most recent snapshot
+FROM ranked_data
+WHERE rn = 1 -- Only pick the most recent row for each product and inventory
+GROUP BY product_id, inventory_id
+);
+
+DROP TABLE IF EXISTS available_date_adjusted_df;
+CREATE TEMPORARY TABLE available_date_adjusted_df as (
+select az.product_id,az.inventory_id,a.snapshot_date,a.order_date, a.last_available_date, a.date_demand_forecasted_for,
+coalesce(a.qty_forecasted,b.qty_forecasted) as qty_forecasted
+from availability_zero az left join
+available_date_adjusted_df_a a on az.product_id = a.product_id and az.inventory_id = a.inventory_id
+left join available_date_adjusted_df_b b on
+a.product_id = b.product_id and b.product_id = b.inventory_id
+);
+
+DROP TABLE IF EXISTS supplier_dc_available_date_adjusted_df_a;
+CREATE TEMPORARY TABLE supplier_dc_available_date_adjusted_df_a AS (
+WITH ranked_data AS (
+SELECT
+df.product_id,
+ism.warehouse_number AS inventory_id,
+df.snapshot_date,
+sku.supplier_to_dc_order_date AS order_date,
+lai.last_available_date,
+df.day AS date_demand_forecasted_for,
+df.qty_final,
+ROW_NUMBER() OVER (PARTITION BY df.product_id, ism.warehouse_number ORDER BY df.snapshot_date DESC) AS rn
+FROM dwd.df_demand_forecast_daily_snapshot63 df
+INNER JOIN   wms_inv_sales_mapping ism
+ON df.sales_org_id = ism.sales_org_id
+INNER JOIN last_available_input lai
+ON lai.product_id = df.product_id
+AND lai.inventory_id = ism.warehouse_number
+AND lai.last_available_date = df.day
+LEFT JOIN delivery_calendar_supplier_dc sku
+ON lai.product_id = sku.product_id
+AND lai.inventory_id = sku.inventory_id
+WHERE
+df.snapshot_date < sku.supplier_to_dc_order_date
+)
+SELECT
+product_id,
+inventory_id,
+max(snapshot_date) AS snapshot_date, -- Get the most recent snapshot_date
+max(order_date) AS order_date,
+max(last_available_date) AS last_available_date,
+max(date_demand_forecasted_for) AS date_demand_forecasted_for,
+max(CASE WHEN rn = 1 THEN qty_final ELSE NULL END) AS qty_forecasted -- Select qty_final for the most recent snapshot
+FROM ranked_data
+WHERE rn = 1 -- Only pick the most recent row for each product and inventory
+GROUP BY product_id, inventory_id
+);
+
+DROP TABLE IF EXISTS supplier_dc_available_date_adjusted_df_b;
+CREATE TEMPORARY TABLE supplier_dc_available_date_adjusted_df_b AS (
+WITH ranked_data AS (
+SELECT
+df.product_id,
+ism.warehouse_number AS inventory_id,
+df.snapshot_date,
+sku.priority_1_dc_order_date AS order_date,
+lai.last_available_date,
+df.day AS date_demand_forecasted_for,
+df.qty_final,
+ROW_NUMBER() OVER (PARTITION BY df.product_id, ism.warehouse_number ORDER BY df.snapshot_date DESC) AS rn
+FROM dwd.df_demand_forecast_daily_snapshot63 df
+INNER JOIN   wms_inv_sales_mapping ism
+ON df.sales_org_id = ism.sales_org_id
+INNER JOIN last_available_input lai
+ON lai.product_id = df.product_id
+AND lai.inventory_id = ism.warehouse_number
+AND lai.last_available_date = df.day
+LEFT JOIN delivery_calendar_supplier_dc sku
+ON lai.product_id = sku.product_id
+AND lai.inventory_id = sku.inventory_id
+WHERE
+lai.last_available_date < sku.priority_1_dc_order_date
+AND df.snapshot_date < lai.last_available_date - 28
+)
+SELECT
+product_id,
+inventory_id,
+max(snapshot_date) AS snapshot_date, -- Get the most recent snapshot_date
+max(order_date) AS order_date,
+max(last_available_date) AS last_available_date,
+max(date_demand_forecasted_for) AS date_demand_forecasted_for,
+max(CASE WHEN rn = 1 THEN qty_final ELSE NULL END) AS qty_forecasted -- Select qty_final for the most recent snapshot
+FROM ranked_data
+WHERE rn = 1 -- Only pick the most recent row for each product and inventory
+GROUP BY product_id, inventory_id
+);
+
+DROP TABLE IF EXISTS supplier_dc_available_date_adjusted_df;
+CREATE TEMPORARY TABLE supplier_dc_available_date_adjusted_df as (
+select az.product_id,az.inventory_id,a.snapshot_date,a.order_date, a.last_available_date, a.date_demand_forecasted_for,
+coalesce(a.qty_forecasted,b.qty_forecasted) as qty_forecasted
+from availability_zero az left join
+available_date_adjusted_df_a a on az.product_id = a.product_id and az.inventory_id = a.inventory_id
+left join available_date_adjusted_df_b b on
+a.product_id = b.product_id and b.product_id = b.inventory_id
+);
+
+DROP TABLE IF EXISTS available_date_adjusted_df_supplier_to_dc;
+CREATE TEMPORARY TABLE available_date_adjusted_df_supplier_to_dc AS (
+select df.product_id, df.inventory_id,sku.priority_1_dc_id,df.order_date,df.last_available_date,df.snapshot_date,
+df.date_demand_forecasted_for, df.qty_forecasted,
+SUM(df.qty_forecasted) OVER (PARTITION BY df.product_id, sku.priority_1_dc_id) AS df_dc_mapping
+from supplier_dc_available_date_adjusted_df df
+left join sellable_dc_sku sku on df.product_id = sku.product_id and df.inventory_id = sku.inventory_id
+);
+
+DROP TABLE IF EXISTS fc_sales_sum_dc;
+CREATE TEMPORARY TABLE fc_sales_sum_dc AS (
+SELECT
+sku.priority_1_dc_id AS dc_id, -- Group by DC (priority_1_dc_id)
+op.product_id, -- Keep product_id to track sales by product
+MIN(sku.inventory_id) AS inventory_id, -- Get inventory_id (MIN, MAX, or any aggregation)
+SUM(op.quantity) AS sold_qty -- Sum the quantity across FCs in the same DC
+FROM
+sellable_dc_sku sku
+LEFT JOIN metrics.order_product op
+ON sku.product_id = op.product_id
+AND sku.inventory_id = op.inventory_id
+LEFT JOIN last_available_input la
+ON la.product_id = sku.product_id
+AND la.inventory_id = sku.inventory_id
+WHERE
+op.order_biz_type IN ('grocery', 'alcohol')
+AND op.payment_mode = 'F'
+AND op.order_day = la.last_available_date
+GROUP BY
+sku.priority_1_dc_id, -- Group by DC level
+op.product_id -- Group by product to aggregate sales for each product within the DC
+);
+
+DROP TABLE IF EXISTS last_available_date_dc_mapping_sales;
+CREATE TEMPORARY TABLE last_available_date_dc_mapping_sales AS (
+SELECT
+sku.inventory_id,
+op.product_id,
+sku.priority_1_dc_id,
+SUM(op.quantity) AS sold_qty,
+SUM(SUM(op.quantity)) OVER (PARTITION BY op.product_id, sku.priority_1_dc_id) AS sales_dc_mapping
+FROM
+sellable_dc_sku sku
+LEFT JOIN metrics.order_product op
+ON sku.product_id = op.product_id
+AND sku.inventory_id = op.inventory_id
+LEFT JOIN last_available_input la
+ON la.product_id = sku.product_id
+AND la.inventory_id = sku.inventory_id
+WHERE
+op.order_biz_type IN ('grocery', 'alcohol')
+AND op.payment_mode = 'F'
+AND op.order_day = la.last_available_date
+GROUP BY
+sku.inventory_id, op.product_id, sku.priority_1_dc_id
+);
+
+DROP TABLE IF EXISTS combined_supplier_to_dc_sales;
+CREATE TEMPORARY TABLE combined_supplier_to_dc_sales AS (
+SELECT
+ad.product_id,
+ad.inventory_id,
+ad.priority_1_dc_id,
+sd.sold_qty as inv_sold_qty,
+sd.sales_dc_mapping as sold_dc_mapping,
+dc.qty_forecasted as inv_df,
+dc.df_dc_mapping
+FROM
+last_available_date_dc_mapping_sales ad
+LEFT JOIN
+last_available_date_dc_mapping_sales sd
+ON ad.product_id = sd.product_id
+AND ad.priority_1_dc_id = sd.priority_1_dc_id
+AND ad.inventory_id = sd.inventory_id
+left join available_date_adjusted_df_supplier_to_dc dc on
+ad.product_id = dc.product_id and ad.inventory_id = dc.inventory_id
+);
+
+DROP TABLE IF EXISTS unique_dc_fcst_sales;
+CREATE TEMPORARY TABLE unique_dc_fcst_sales AS (
+select product_id, priority_1_dc_id,
+max(sold_dc_mapping) as sold_dc_mapping,
+max(df_dc_mapping) as df_dc_mapping
+from combined_supplier_to_dc_sales
+group by 1,2
+);
+
+/*
+select * from available_date_adjusted_df
+where inventory_id = 8 and product_id = 77
+
+select * from dwd.df_demand_forecast_daily_snapshot63 where product_id = 77
+and (sales_org_id = 4 or sales_org_id = 8) and day = '2025-01-17'
+order by snapshot_date desc limit 200
+
+select * from last_available_input where product_id = 77 and inventory_id = 8
+
+select * from sellable_dc_sku where product_id = 77 and inventory_id = 8
+*/
+
+--sales forecasts compiled data
+DROP TABLE IF EXISTS sales;
+CREATE TEMPORARY TABLE sales AS (
+SELECT
+op.inventory_id,
+op.product_id,
+SUM(op.quantity) AS sold_qty
+FROM
+sellable_dc_sku sku
+LEFT JOIN metrics.order_product op
+ON sku.product_id = op.product_id
+AND sku.inventory_id = op.inventory_id
+LEFT JOIN last_available_input la
+ON la.product_id = sku.product_id
+AND la.inventory_id = sku.inventory_id
+WHERE
+op.order_biz_type IN ('grocery', 'alcohol')
+AND op.payment_mode = 'F'
+AND op.order_day = la.last_available_date
+GROUP BY
+op.inventory_id, op.product_id
+);
+
+--find oos reason code for no order date
+
+DROP TABLE IF EXISTS irs_submission;
+CREATE TEMPORARY TABLE irs_submission AS (
+SELECT
+product_id,
+facility_id,
+-- Show 'failed' only if there's no 'success', or show 'success' if it's present
+CASE
+WHEN SUM(CASE WHEN submission_status = 'SUCCESS' THEN 1 ELSE 0 END) > 0 THEN
+'success'
+WHEN SUM(CASE WHEN submission_status = 'FAILED' THEN 1 ELSE 0 END) > 0 THEN
+'failed'
+ELSE
+NULL -- Exclude 'null' statuses, which means no status at all for that group
+END AS submission_status
+FROM  irs_network_purchase_order_product
+WHERE snapshot_date =        '2026-01-15'-1
+AND submission_status IS NOT NULL -- Exclude rows where submission_status is null
+GROUP BY product_id, facility_id, snapshot_date
+HAVING COUNT(*) = 1 -- Ensure there's no duplication of product_id and facility_id
+);
+
+
+DROP TABLE IF EXISTS irs_qty_req_submitted;
+CREATE TEMPORARY TABLE irs_qty_req_submitted AS (
+SELECT
+irs.product_id,
+irs.facility_id,
+pop.submission_status,
+MAX(irs.order_quantity) AS req_order_quantity,
+MAX(pop.order_quantity) AS submitted_order_quantity
+FROM dc_sku_transfer_schedule sku
+left join   irs_network_product_calculation irs on
+sku.product_id = irs.product_id and sku.inventory_id = irs.facility_id and sku.priority_1_dc_order_date = irs.snapshot_date
+LEFT JOIN  irs_network_purchase_order_product pop on
+sku.product_id = pop.product_id and sku.inventory_id = pop.facility_id and sku.priority_1_dc_order_date = pop.snapshot_date
+AND pop.submission_status = 'SUCCESS'
+GROUP BY irs.product_id, irs.facility_id, pop.submission_status
+);
+
+DROP TABLE IF EXISTS last_available_input_dc;
+CREATE TEMPORARY TABLE last_available_input_dc AS (
+WITH
+prefiltered_availability AS (
+SELECT
+product_id,
+inventory_id,
+visit_day,
+product_sale_status_title
+FROM
+metrics.product_availability
+WHERE
+visit_day <=        '2026-01-15'-1
+),
+fallback_last_available AS (
+SELECT
+iv.product_id,
+iv.warehouse_number AS inventory_id,
+MAX(iv.record_date) AS fallback_visit_day
+FROM
+ sc_inventory_version iv
+JOIN
+dc_sku_transfer_schedule sku
+ON iv.product_id = sku.product_id
+AND iv.warehouse_number = sku.priority_1_dc_id
+WHERE
+iv.available_qty > 0
+AND iv.record_date <=        '2026-01-15'-1
+GROUP BY
+iv.product_id, iv.warehouse_number
+),
+last_available_data AS (
+SELECT
+sku.priority_1_dc_id AS inventory_id,
+sku.product_id,
+COALESCE(
+MAX(a.visit_day),
+MAX(fba.fallback_visit_day)
+) AS last_available_date,
+MAX(a.visit_day) AS actual_visit_day,
+MAX(fba.fallback_visit_day) AS fallback_day,
+MAX(sku.priority_1_dc_order_date) AS priority_1_dc_order_date,
+MAX(a.product_sale_status_title) AS product_sale_status_title,
+MAX(irs.target_quantity) AS target_quantity,
+MAX(irs.sellable_quantity) AS sellable_quantity,
+MAX(irs.order_quantity) AS order_quantity,
+MAX(irs.avg_daily_sales) AS avg_daily_sales,
+MAX(irs.avg_daily_demand_forecast) AS avg_daily_demand_forecast
+FROM
+dc_sku_transfer_schedule sku
+LEFT JOIN
+fallback_last_available fba
+ON sku.product_id = fba.product_id AND sku.priority_1_dc_id = fba.inventory_id
+LEFT JOIN
+prefiltered_availability a -- Use prefiltered table here
+ON sku.product_id = a.product_id AND sku.priority_1_dc_id = a.inventory_id
+LEFT JOIN
+dwd.irs_network_product_calculation irs
+ON sku.product_id = irs.product_id AND sku.priority_1_dc_id = irs.facility_id AND a.visit_day = irs.snapshot_date
+WHERE
+COALESCE(a.visit_day, fba.fallback_visit_day) IS NOT NULL
+GROUP BY
+sku.priority_1_dc_id,
+sku.product_id
+)
+SELECT *
+FROM last_available_data
+WHERE last_available_date IS NOT NULL
+);
+
+
+DROP TABLE IF EXISTS shipping_transactions;
+CREATE TEMPORARY TABLE shipping_transactions AS (
+select distinct trx.product_id,trx.original_quantity,trx.receipt_quantity,
+wms.target_warehouse_num as inventory_id,
+wms.invoice_id,sku.priority_1_dc_order_date,
+date(wms.rec_create_time) as date_transfer_order_created,
+wms.markout_date,wms.eta_date,
+DATE(invoi.rec_create_time) as received_into_fc_date,
+inv.status_title,inv.status
+from   wms_invoice_internal wms
+left join dwd.invoice inv on wms.invoice_id = inv.id
+left join dwd.trx_invoice_line trx on wms.invoice_id = trx.invoice_id
+left join dim.invoice_line_internal invoi on invoi.invoice_id = trx.invoice_id
+inner join dc_sku_transfer_schedule sku on sku.product_id = invoi.product_id and sku.inventory_id = wms.target_warehouse_num
+and sku.priority_1_dc_order_date = date(wms.rec_create_time)
+);
+
+drop table if exists lhms_shipping;
+create temporary table lhms_shipping as
+(
+select distinct
+tllgl.load_group_reference_id
+,load_group_type
+,tllli.truck_id
+,tlf."name" as ending_facility
+,min(tlts.estimated_arrival_date::date) as estimated_pickup_date
+,min(tlts.actual_arrival_date::date) as actual_pickup_date
+,max(tlts.estimated_arrival_date::date) as estimated_delivery_date
+,max(tlts.actual_arrival_date::date) as actual_delivery_date
+,actual_load_date ::date as PO_actual_load_date
+,actual_unload_date :: date as PO_actual_unload_date
+,min(tll.rec_create_time::date) as IB_date_to_cross_dock
+,tllli.status as load_status
+,tlt.status as truck_status
+,case
+WHEN tlf.region = 'SF' THEN 7
+WHEN tlf.region = 'WA' THEN 8
+WHEN tlf.region = 'NJ' THEN 16
+WHEN tlf.region = 'TX' THEN 20
+WHEN tlf.region = 'LA' then 25
+WHEN tlf.region = 'IL' THEN 29
+WHEN tlf.region = 'FL' THEN 35
+else null end as inventory_id
+from dwd.tms_lhms_load_group_load tllgl
+join dwd.tms_lhms_load tll on tllgl.load_id = tll.id
+left join dwd.tms_lhms_load_lane_information tllli on tllgl.load_id = tllli.load_id
+left join dwd.tms_lhms_truck_stop tlts on tllli.truck_id = tlts.truck_id
+left join dwd.tms_lhms_truck tlt on tllli.truck_id = tlt.id
+left join dwd.tms_lhms_facility tlf ON tll.destination_id = tlf.id
+where 1=1
+--and tlts.truck_id = 6680
+group by
+tllgl.load_group_reference_id
+,tllgl.load_id
+,load_group_type
+,tllli.truck_id
+,actual_load_date
+,actual_unload_date
+,tll.rec_create_time
+,tllli.status
+,tlf."name"
+,tlt.status
+,tlf.region
+);
+
+DROP TABLE IF EXISTS shipping_transactions_past_week;
+CREATE TEMPORARY TABLE shipping_transactions_past_week AS (
+SELECT
+trx.product_id,
+MAX(trx.original_quantity) AS original_quantity,
+MAX(trx.receipt_quantity) AS receipt_quantity,
+wms.target_warehouse_num AS inventory_id,
+MAX(wms.invoice_id) AS invoice_id,
+MAX(sku.priority_1_dc_order_date) AS priority_1_dc_order_date,
+MAX(DATE(wms.rec_create_time)) AS date_transfer_order_created,
+MAX(wms.markout_date) AS estimated_pickup_date,
+--MAX(lhms.estimated_pickup_date) as estimated_pickup_date,
+MAX(lhms.actual_pickup_date) as actual_pickup_date,
+--MAX(wms.eta_date) AS eta_date,
+MAX(lhms.estimated_delivery_date) as estimated_delivery_date,
+MAX(DATE(invoi.rec_create_time)) AS actual_delivery_date,
+--MAX(lhms.actual_delivery_date) as actual_delivery_date,
+MAX(inv.status_title) AS status_title,
+MAX(inv.status) AS status
+FROM   wms_invoice_internal wms
+LEFT JOIN dwd.invoice inv ON wms.invoice_id = inv.id
+LEFT JOIN dwd.trx_invoice_line trx ON wms.invoice_id = trx.invoice_id
+LEFT JOIN dim.invoice_line_internal invoi ON invoi.invoice_id = trx.invoice_id
+--left join last_available_input lai on trx.product_id = lai.product_id and wms.target_warehouse_num = lai.inventory_id
+INNER JOIN dc_sku_transfer_schedule sku
+ON sku.product_id = invoi.product_id
+AND sku.inventory_id = wms.target_warehouse_num
+left join lhms_shipping lhms on wms.invoice_id = lhms.load_group_reference_id
+WHERE
+wms.eta_date >        '2026-01-15'-1 - 7
+AND wms.eta_date <        '2026-01-15'-1
+--AND wms.eta_date < invoi.rec_create_time
+--and wms.eta_date <= lai.last_available_date
+GROUP BY
+trx.product_id, wms.target_warehouse_num
+);
+
+DROP TABLE IF EXISTS promo_check;
+CREATE TEMPORARY TABLE promo_check AS (
+SELECT
+lai.product_id,
+lai.inventory_id,
+min(lai.last_available_date)::date as last_available_date,
+min(ppe.product_start_time)::date as product_start_time,
+min(ppe.product_end_time)::date as product_end_time,
+min(ppe.is_lightning_deal) as is_lightning_deal,
+min(ppe.rec_create_time)::date as rec_create_time,
+min(ppe.rec_update_time)::date as rec_update_time
+FROM
+dwd.pps_promotion_event_product ppe
+LEFT JOIN
+  wms_inv_sales_mapping ism
+ON ism.sales_org_id = ppe.sales_org_id
+INNER JOIN
+last_available_input lai
+ON ppe.product_id = lai.product_id
+AND ism.warehouse_number = lai.inventory_id
+left join dc_sku_transfer_schedule im on ppe.product_Id = im.product_id and ism.warehouse_number = im.inventory_id
+WHERE
+ppe.product_start_time <= lai.last_available_date and
+ppe.product_start_time >= im.priority_1_dc_order_date
+group by lai.product_id,lai.inventory_id
+);
+
+
+
+drop table if exists dc_fc_oos_reason_codes;
+create temporary table dc_fc_oos_reason_codes as (
+select distinct sku.*,
+lai.last_available_date,
+dcavl.last_available_date as dc_last_available_date,
+coalesce(req.submitted_order_quantity,0) as base_fc_order_quantity_submitted ,
+req.req_order_quantity as base_fc_recommended_order_quantity,
+case when irs.final_planning_horizon_days >= 28 then irs.avg_daily_demand_forecast * 14
+when irs.final_planning_horizon_days <= 28 then irs.avg_daily_demand_forecast * 2
+end as dc_priority_1_reserve_qty,
+coalesce(bb.qty,0) as dc_bin_qty, coalesce(sto.qty,0) as dc_stock_qty,
+irs.sellable_quantity, irs.target_quantity,irs.order_quantity, irs.available_quantity,
+irs.final_planning_horizon_days,irs.is_order_quantity_satisfied_by_primary_lane,
+sa.sold_qty as sold_qty_last_available_date,df.snapshot_date as snapshot_demand_forecasted, df.date_demand_forecasted_for, df.qty_forecasted,
+st.status_title,st.invoice_id,st.date_transfer_order_created as most_recent_internal_transfer_created_date,
+st.original_quantity,st.receipt_quantity,st.estimated_pickup_date, st.actual_pickup_date,
+st.estimated_delivery_date, st.actual_delivery_date,
+req.req_order_quantity,
+       '2026-01-15'-1-lai.last_available_date as days_oos,
+case
+when dc_priority_1_reserve_qty > irs.sellable_quantity and irs.sellable_quantity > 0
+then 'Supplier to DC Issue: DC has zero transferrable inventory due to reserve quantity'
+when st.actual_delivery_date > st.estimated_delivery_date and st.actual_pickup_date > st.estimated_pickup_date
+then 'DC to FC Issue: Shipment late due to late pickup'
+when st.actual_delivery_date > st.estimated_delivery_date and st.actual_pickup_date = st.estimated_pickup_date
+then 'DC to FC Issue: shipment late due to carrier arriving late, pickup on time'
+WHEN (COALESCE(sku.priority_1_sellable_qty, 0)) <= 0 or ((irs.is_order_quantity_satisfied_by_primary_lane is null or irs.is_order_quantity_satisfied_by_primary_lane = 0) and irs.order_quantity > 0)
+then 'Supplier to DC Issue: DC has zero transferrable inventory'
+WHEN df.qty_forecasted = 0 and lai.last_available_date > sku.priority_1_dc_order_date then 'DC to FC Issue: No forecasted demand at order date'
+when pm.product_id is not null and pm.rec_create_time > sku.priority_1_dc_order_date then
+'DC to FC Issue - Promotion SKU created after order date'
+when sub.submission_status = 'FAILED' then 'DC to FC Issue - PR Failed'
+when req.submitted_order_quantity < req.req_order_quantity then
+'DC to FC Issue - recommended order quantity < submitted quantity, not enough inventory at DC'
+when tr.original_quantity < tr.receipt_quantity then 'DC to FC Issue - inventory lost during shipping'
+when (sa.sold_qty - df.qty_forecasted) / sa.sold_qty > 0.1 then 'DC to FC Issue - demand underforecasted at DC Order Date'
+--when (sal.sold_qty - fcst.qty_forecasted) / sal.sold_qty > 0.1 then 'Supplier to DC Issue - demand underforecasted at Supplier Order Date'
+--when st.product_id is null and irs.is_order_quantity_satisfied_by_primary_lane = 1 and irs.order_quantity > 0 then 'DC to FC Issue - DC backlog issue (No internal order placed in last 7 days & transferrable inventory w/ order quantity)'
+else 'unknown'
+END AS dc_oos_reason_code
+from
+sellable_dc_sku sku
+left join last_available_input lai on
+sku.product_id = lai.product_id and sku.inventory_id = lai.inventory_id
+left join last_available_input_dc dcavl on sku.product_id = dcavl.product_id and sku.priority_1_dc_id = dcavl.inventory_id
+left join sales sa on sa.product_id=sku.product_id and sa.inventory_id = sku.inventory_id
+left join available_date_adjusted_df df on df.product_id = sku.product_id and df.inventory_id = sku.inventory_id
+left join irs_submission sub on sku.product_id = sub.product_id and sku.inventory_id = sub.facility_id
+left join shipping_transactions tr on sku.product_id = tr.product_id and sku.inventory_id = tr.inventory_id
+left join shipping_transactions_past_week st on sku.product_id = st.product_id and sku.inventory_id = st.inventory_id
+left join irs_qty_req_submitted req on sku.product_id = req.product_id and sku.inventory_id = req.facility_id
+left join irs_qty_req_submitted reqa on sku.inventory_id = req.facility_id
+left join promo_check pm on sku.product_id = pm.product_id and sku.inventory_id = pm.inventory_id
+left join available_date_adjusted_df_supplier_to_dc fcst on fcst.product_id = sku.product_id and fcst.inventory_id = sku.inventory_id
+left join fc_sales_sum_dc sal on sal.product_id = sku.product_id and sal.inventory_id = sku.inventory_id
+left join   irs_network_product_calculation irs on sku.product_id = irs.product_id and irs.snapshot_date = sku.priority_1_dc_order_date and
+CASE
+WHEN irs.facility_id = 37 THEN 7
+WHEN irs.facility_id = 33 THEN 16
+ELSE irs.facility_id
+END = sku.inventory_id
+left join bin_inventory bb on sku.product_id = bb.product_id and sku.inventory_id = bb.inventory_id
+left join stock_inventory sto on sku.product_id = sto.product_id and sku.inventory_id = sto.inventory_id
+);
+
+-- Start of Zhe's Code
+
+
+DROP TABLE IF EXISTS irspr_inventory_adjusted;
+CREATE TEMPORARY TABLE irspr_inventory_adjusted AS
+WITH ranked_irspr AS (
+SELECT
+product_id,
+CASE
+WHEN irspr.facility_id = 37 THEN 7
+WHEN irspr.facility_id = 33 THEN 16
+ELSE irspr.facility_id
+END AS facility_id_adjusted,
+irspr.submitted_quantity AS irs_pr_submitted_quantity,
+irspr.submission_status AS irs_pr_submission_status,
+irspr.purchase_request_id AS irs_pr_id,
+irspr.order_date,
+irspr.vendor_id,
+irspr.delivery_date,
+ROW_NUMBER() OVER (
+PARTITION BY vendor_id,
+CASE
+WHEN irspr.facility_id = 37 THEN 7
+WHEN irspr.facility_id = 33 THEN 16
+ELSE irspr.facility_id
+END,
+product_id,
+order_date
+ORDER BY submitted_quantity DESC
+) AS row_num
+FROM  irs_network_purchase_order_product irspr
+)
+SELECT
+product_id,
+facility_id_adjusted,
+irs_pr_submitted_quantity,
+irs_pr_submission_status,
+irs_pr_id,
+order_date,
+vendor_id,
+delivery_date
+FROM ranked_irspr
+WHERE row_num = 1;
+
+drop table if exists inv_inventory_adjusted;
+create temporary table inv_inventory_adjusted as (
+select inv.product_id,
+case
+when inv.facility_id = 37 then 7
+when inv.facility_id = 33 then 16
+else inv.facility_id end as facility_id_adjusted,
+inv.order_quantity as suggested_order_date_order_quantity,inv.target_quantity as order_date_target_quantity,inv.sellable_quantity as order_date_sellable_quantity,
+inv.snapshot_date,inv.order_quantity,inv.target_quantity,inv.sellable_quantity
+from   irs_network_product_calculation inv
+);
+
+drop table if exists inv_inventory_adjusteda;
+create temporary table inv_inventory_adjusteda as (
+select distinct inv.product_id,
+case
+when inv.facility_id = 37 then 7
+when inv.facility_id = 33 then 16
+else inv.facility_id end as facility_id_adjusted
+from   irs_network_product_calculation inv
+);
+
+drop table if exists Red_Shift_Delivery_Calendar_Fc_sha ;
+create temporary table Red_Shift_Delivery_Calendar_Fc_sha as (
+select npop.vendor_id,npop.product_id,facility_id_adjusted as inventory_id,
+mp.storage_type,npop.order_date,
+npop.delivery_date - npop.order_date as lead_time, npop.delivery_date,
+min(pr.order_cycle) as order_week,
+row_number() over(partition by npop.facility_id_adjusted, npop.product_id order by order_date desc) as rn_order,
+row_number() over(partition by npop.facility_id_adjusted, npop.product_id order by delivery_date desc) as rn_delivery
+from irspr_inventory_adjusted npop
+left join dc_sku_transfer_schedule sku on sku.product_id = npop.product_id and
+sku.priority_1_dc_id = npop.facility_id_adjusted
+left join dwd.mdse_product mp on npop.product_id = mp.product_id
+left join  sc_pr_config_delivery_calendar pr on
+CASE
+WHEN pr.inventory_id = 33 THEN 16
+WHEN pr.inventory_id = 37 THEN 7
+ELSE pr.inventory_id
+END = npop.facility_id_adjusted
+and pr.storage_type = mp.storage_type and pr.vendor_id = npop.vendor_id
+where delivery_date <= priority_1_dc_order_date
+group by 1,2,3,4,5,6,7
+);
+
+drop table if exists Delivery_Calendar_Fc_sh_a ;
+create temporary table Delivery_Calendar_Fc_sh_a as (
+WITH RECURSIVE NS (n) AS (
+SELECT 1
+UNION ALL
+SELECT n + 1
+FROM NS
+WHERE n < 52)
+, t1 as (
+select
+distinct
+b.vendor_id
+, d.product_id
+, bb.ref_inventory_id as inventory_id
+, b.storage_type
+, TRIM(
+SPLIT_PART(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',', NS.n)) :: int AS order_week
+, b.lead_time
+, c.week_begin_date + b.order_weekday as order_date
+, c.week_begin_date + b.order_weekday + b.lead_time as delivery_date
+from NS
+inner join
+(select
+distinct
+a.vendor_id
+, a.inventory_id,
+split_part(a.storage_type, ',', s.id) as storage_type
+, a.order_weekday
+, a.frequency
+, a.lead_time
+, a.order_cycle
+from  sc_pr_config_delivery_calendar a
+, (select 1 as id union all select 2 union all select 3 union all select 4) s
+where 1=1
+and a.status = 'A'
+and split_part(a.storage_type, ',', s.id) != '') b
+on length(b.order_cycle) > 2
+and NS.n <= REGEXP_COUNT(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',') + 1
+and length(b.order_cycle) > 2
+left join  inventory bb
+on b.inventory_id = bb.inventory_id
+left join
+(select
+distinct
+week_begin_date
+, full_week_number
+from dim.calendar
+where year_id = 2025
+and day_of_week > 0
+and cal_date not in ('2023-01-01', '2023-12-31')) c
+on c.full_week_number
+=
+(TRIM(
+SPLIT_PART(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',', NS.n)) :: int)
+left join (select a.*, b.storage_type from mdse_product_warehouse a left join dwd.mdse_product b using(product_id)) d
+on b.inventory_id = d.inventory_id
+and b.vendor_id = d.primary_vendor_id
+and b.storage_type = d.storage_type
+)
+select
+t1.*
+, row_number() over(partition by t1.inventory_id, t1.product_id order by order_date desc) as rn_order
+, row_number() over(partition by t1.inventory_id, t1.product_id order by delivery_date desc) as rn_delivery
+from t1
+--left join dc_sku_transfer_schedule sku on t1.product_id = sku.product_id and t1.inventory_id = sku.inventory_id
+where
+--order_date <        '2026-01-15'-1
+delivery_date <=        '2026-01-15'-1
+);
+
+drop table if exists Delivery_Calendar_Fc_sh_b ;
+create temporary table Delivery_Calendar_Fc_sh_b as (
+select a.vendor_id,a.product_id,sku.priority_1_dc_id as inventory_id,
+a.storage_type,a.order_week,a.lead_time,a.order_date,a.delivery_date,a.rn_order,a.rn_delivery
+from Delivery_Calendar_Fc_sh_a a
+left join dc_sku_transfer_schedule sku on a.product_id = sku.product_id and a.inventory_id = sku.inventory_id
+where delivery_date <= priority_1_dc_order_date
+);
+
+drop table if exists Delivery_Calendar_Fc_sh_c ;
+create temporary table Delivery_Calendar_Fc_sh_c as (
+select b.vendor_id,b.product_id,b.inventory_id,b.storage_type,b.order_week,b.lead_time,b.order_date,b.delivery_date,
+row_number () over (partition by b.inventory_id,b.product_id order by order_date desc) as rn_order,
+row_number () over (partition by b.inventory_id,b.product_id order by delivery_date desc) as rn_delivery
+from Delivery_Calendar_Fc_sh_b b
+);
+
+drop table if exists Delivery_Calendar_Fc_sh ;
+create temporary table Delivery_Calendar_Fc_sh as (
+select * from Delivery_Calendar_Fc_sh_c
+where rn_delivery = 1
+);
+
+DROP TABLE IF EXISTS last_available_input;
+CREATE TEMPORARY TABLE last_available_input AS (
+WITH
+fallback_last_available AS (
+SELECT
+iv.product_id,
+iv.warehouse_number AS inventory_id,
+MAX(iv.record_date) AS fallback_visit_day
+FROM
+ sc_inventory_version iv
+JOIN
+dc_sku_transfer_schedule sku
+ON iv.product_id = sku.product_id
+AND iv.warehouse_number = sku.priority_1_dc_id
+WHERE
+iv.available_qty > 0
+AND iv.record_date < sku.priority_1_dc_order_date -- Pre-filter here
+GROUP BY
+iv.product_id, iv.warehouse_number
+),
+last_available_data AS (
+SELECT
+sku.priority_1_dc_id AS inventory_id,
+sku.product_id,
+COALESCE(
+MAX(a.visit_day),
+MAX(fba.fallback_visit_day)
+) AS last_available_date,
+MAX(sku.priority_1_dc_order_date) AS priority_1_dc_order_date,
+MAX(a.product_sale_status_title) AS product_sale_status_title,
+MAX(a.weee_buyer_name) as weee_buyer_name,
+MAX(irs.target_quantity) AS target_quantity,
+MAX(irs.sellable_quantity) AS sellable_quantity,
+MAX(irs.order_quantity) AS order_quantity,
+MAX(irs.avg_daily_sales) AS avg_daily_sales,
+MAX(irs.avg_daily_demand_forecast) AS avg_daily_demand_forecast
+FROM
+dc_sku_transfer_schedule sku
+LEFT JOIN
+fallback_last_available fba
+ON sku.product_id = fba.product_id AND sku.priority_1_dc_id = fba.inventory_id
+LEFT JOIN
+metrics.product_availability a
+ON sku.product_id = a.product_id AND sku.priority_1_dc_id = a.inventory_id
+LEFT JOIN
+dwd.irs_network_product_calculation irs
+ON sku.product_id = irs.product_id AND sku.priority_1_dc_id = irs.facility_id AND a.visit_day = irs.snapshot_date
+WHERE
+COALESCE(a.visit_day, fba.fallback_visit_day) IS NOT NULL
+GROUP BY
+sku.priority_1_dc_id,
+sku.product_id
+)
+SELECT *
+FROM last_available_data
+);
+
+drop table if exists date_made_live;
+create temporary table date_made_live as
+(
+select pa.product_id,pa.inventory_id,product_sale_status_title,max(visit_day)+1 as date_made_live from
+metrics.product_availability pa
+left join dc_sku_transfer_schedule sku on pa.product_id = sku.product_id and pa.inventory_id = sku.inventory_id
+where pa.product_sale_status != 'A' and pa.product_sale_status is not null
+and visit_day < sku.priority_1_dc_order_date
+group by pa.product_id,pa.inventory_id,product_sale_status_title
+);
+
+--select * from last_available_input where inventory_id = 20 and product_id = 31053;
+--select * from input_metrics where inventory_id = 20 and product_id = 31053;
+--select * from metrics.product_availability where inventory_id = 20 and product_id = 31053
+--order by visit_day desc limit 500
+drop table if exists availability_zero;
+create temporary table availability_zero as
+select sku.product_id,
+case
+when sku.priority_1_dc_id = 33 then 16
+when sku.priority_1_dc_id = 37 then 7
+end as inventory_id,
+sku.storage_type,mpw.primary_vendor_id,        '2026-01-15'-1 as visit_day
+from dc_sku_transfer_schedule sku
+LEFT JOIN
+mdse_product_warehouse mpw
+ON sku.product_id = mpw.product_id
+AND sku.priority_1_dc_id = mpw.inventory_id;
+--CASE
+--WHEN mpw.inventory_id = 33 THEN 16
+--WHEN mpw.inventory_id = 37 THEN 7
+--ELSE mpw.inventory_id
+--END;
+
+
+
+--select * from    sc_pr_config_dedicated_relation spcdr limit 2;
+drop table if exists split_inventory_relationship;
+create temporary table split_inventory_relationship as (
+WITH RECURSIVE split_storage_type (id, vendor_id, inventory_id, storage_type, remaining_storage_type, supply_mode, connection_inventory_id, connection_inventory_type) AS (
+SELECT
+id,
+vendor_id,
+inventory_id,
+LEFT(storage_type, POSITION(',' IN storage_type) - 1) AS storage_type,
+RIGHT(storage_type, LENGTH(storage_type) - POSITION(',' IN storage_type)) AS remaining_storage_type,
+supply_mode,
+connection_inventory_id,
+connection_inventory_type
+FROM  sc_pr_config_inventory_relation
+WHERE POSITION(',' IN storage_type) > 0
+UNION ALL
+SELECT
+id,
+vendor_id,
+inventory_id,
+CASE
+WHEN POSITION(',' IN remaining_storage_type) > 0 THEN LEFT(remaining_storage_type, POSITION(',' IN remaining_storage_type) - 1)
+ELSE remaining_storage_type
+END AS storage_type,
+CASE
+WHEN POSITION(',' IN remaining_storage_type) > 0 THEN RIGHT(remaining_storage_type, LENGTH(remaining_storage_type) - POSITION(',' IN remaining_storage_type))
+ELSE NULL
+END AS remaining_storage_type,
+supply_mode,
+connection_inventory_id,
+connection_inventory_type
+FROM split_storage_type
+WHERE remaining_storage_type IS NOT NULL
+),
+split_ir as (
+SELECT
+id,
+vendor_id,
+inventory_id,
+storage_type,
+supply_mode,
+connection_inventory_id,
+connection_inventory_type
+FROM split_storage_type
+UNION ALL
+SELECT
+id,
+vendor_id,
+inventory_id,
+storage_type,
+supply_mode,
+connection_inventory_id,
+connection_inventory_type
+FROM  sc_pr_config_inventory_relation
+WHERE POSITION(',' IN storage_type) = 0
+ORDER BY id, storage_type)
+select * from split_ir);
+
+
+drop table if exists input_metricsa;
+create temporary table input_metricsa as
+( WITH RECURSIVE split_ethnicity(id, vendor_id, dedicated_user_id, storage_type, timezone, warehouse_id, ethnicity, rest) AS (
+SELECT
+id,
+vendor_id,
+dedicated_user_id,
+storage_type,
+timezone,
+warehouse_id,
+LEFT(ethnicity_str, POSITION(',' IN ethnicity_str) - 1) AS ethnicity,
+RIGHT(ethnicity_str, LENGTH(ethnicity_str) - POSITION(',' IN ethnicity_str)) AS rest
+FROM
+   sc_pr_config_dedicated_relation
+WHERE
+POSITION(',' IN ethnicity_str) > 0
+UNION ALL
+SELECT
+id,
+vendor_id,
+dedicated_user_id,
+storage_type,
+timezone,
+warehouse_id,
+CASE
+WHEN POSITION(',' IN rest) > 0 THEN LEFT(rest, POSITION(',' IN rest) - 1)
+ELSE rest
+END,
+CASE
+WHEN POSITION(',' IN rest) > 0 THEN RIGHT(rest, LENGTH(rest) - POSITION(',' IN rest))
+ELSE NULL
+END
+FROM
+split_ethnicity
+WHERE
+rest IS NOT NULL
+) ,
+final_split AS (
+SELECT id, vendor_id, dedicated_user_id, storage_type, timezone, warehouse_id, ethnicity
+FROM split_ethnicity
+UNION ALL
+SELECT
+id,
+vendor_id,
+dedicated_user_id,
+storage_type,
+timezone,
+warehouse_id,
+ethnicity_str AS ethnicity
+FROM
+   sc_pr_config_dedicated_relation
+WHERE
+POSITION(',' IN ethnicity_str) = 0
+),
+deduped_split AS (
+SELECT *,
+ROW_NUMBER() OVER (PARTITION BY vendor_id, warehouse_id, storage_type, ethnicity ORDER BY id) as rn
+FROM final_split
+),
+ranked_availability AS (
+SELECT
+visit_day,
+visit_week,
+product_id,
+product_title_en,
+product_ethnicity,
+division,
+parent_category,
+category,
+sub_category,
+inventory_id,
+inventory_title,
+supply_chain_analyst_id,
+purchase_specialist,
+primary_vendor,
+primary_vendor_title,
+available,
+tier,
+storage_type,
+cast(dc_sku_flag as integer) as dc_sku_flag,
+direct_import_flag,
+core_flag,
+product_sale_status,
+product_sale_status_title,
+ROW_NUMBER() OVER (PARTITION BY product_id, inventory_id ORDER BY visit_day DESC) AS rn
+FROM
+metrics.product_availability
+where visit_day =        '2026-01-15'-1--- Anchoring to yesterday, change this horizon to give all historical available days
+---       '2026-01-15'-1'
+),
+latest_calendar AS (
+SELECT
+* from Delivery_Calendar_Fc_sh )
+,
+main_query AS (
+SELECT
+'2026-01-15' AS record_date,
+w.*,
+ra.visit_day,
+ra.visit_week,
+ra.product_title_en,
+ra.product_ethnicity,
+ra.division,
+ra.parent_category,
+ra.category,
+ra.sub_category,
+ra.inventory_title AS availability_inventory_title,
+ra.supply_chain_analyst_id AS availability_supply_chain_analyst_id,
+ra.purchase_specialist AS availability_purchase_specialist,
+ra.primary_vendor AS availability_primary_vendor,
+ra.primary_vendor_title AS availability_primary_vendor_title,
+ra.available AS availability_available,
+ra.tier AS availability_tier,
+ra.storage_type AS availability_storage_type,
+cast(ra.dc_sku_flag as integer) as availability_dc_sku_flag,
+ra.direct_import_flag AS availability_direct_import_flag,
+ra.core_flag AS availability_core_flag,
+ra.product_sale_status AS availability_product_sale_status,
+ra.product_sale_status_title AS availability_product_sale_status_title,
+ds.dedicated_user_id,
+ds.timezone,
+ds.ethnicity AS split_ethnicity,
+lc.vendor_id,
+lc.storage_type,
+lc.order_week,
+lc.lead_time,
+lc.order_date,
+lc.delivery_date,
+lc.rn_order,
+lc.rn_delivery,
+ir.supply_mode,
+ir.connection_inventory_id,
+ir.connection_inventory_type,
+CASE
+WHEN ra.product_sale_status_title = 'DNR' THEN 'DNR'
+--WHEN (w.purchase_method = 'L' AND w.is_purchase = 'N' and w.inventory_id != 16) OR
+--(w.purchase_method = 'D' AND w.is_purchase = 'Y') THEN 'purchase flag conflict'
+WHEN ds.dedicated_user_id IS NULL THEN 'Dedicated relationship missing'
+WHEN lc.order_week IS NULL THEN 'Delivery calendar is missing'
+WHEN ir.supply_mode IS NULL THEN 'Inventory relationship missing'
+ELSE 'unknown'
+END AS OOS_reason
+FROM
+(SELECT
+*,
+CASE
+WHEN inventory_id = 33 THEN 16
+WHEN inventory_id = 37 THEN 7
+ELSE inventory_id
+END AS adjusted_inventory_id
+FROM mdse_product_warehouse) w
+LEFT JOIN
+(
+SELECT
+visit_day,
+visit_week,
+product_id,
+product_title_en,
+product_ethnicity,
+division,
+parent_category,
+category,
+sub_category,
+inventory_id,
+inventory_title,
+supply_chain_analyst_id,
+purchase_specialist,
+primary_vendor,
+primary_vendor_title,
+available,
+tier,
+storage_type,
+cast(dc_sku_flag as integer) as dc_sku_flag,
+direct_import_flag,
+core_flag,
+product_sale_status,
+product_sale_status_title
+FROM
+ranked_availability
+WHERE
+rn = 1
+) ra
+ON
+w.adjusted_inventory_id = ra.inventory_id
+AND w.product_id = ra.product_id
+LEFT JOIN
+(SELECT
+*,
+CASE
+WHEN warehouse_id = 33 THEN 16
+WHEN warehouse_id = 37 THEN 7
+ELSE warehouse_id
+END AS adjusted_warehouse_id
+FROM deduped_split) ds
+ON
+w.primary_vendor_id = ds.vendor_id
+AND w.adjusted_inventory_id = ds.adjusted_warehouse_id
+AND ra.storage_type = ds.storage_type
+AND ra.product_ethnicity = ds.ethnicity
+LEFT JOIN
+(SELECT
+*,
+CASE
+WHEN inventory_id = 33 THEN 16
+WHEN inventory_id = 37 THEN 7
+ELSE inventory_id
+END AS adjusted_inventory_id
+FROM latest_calendar) lc
+ON
+w.primary_vendor_id = lc.vendor_id
+AND w.adjusted_inventory_id = lc.adjusted_inventory_id
+AND ra.storage_type = lc.storage_type
+AND w.product_id = lc.product_id
+LEFT JOIN
+(SELECT
+*,
+CASE
+WHEN inventory_id = 33 THEN 16
+WHEN inventory_id = 37 THEN 7
+ELSE inventory_id
+END AS adjusted_inventory_id
+FROM split_inventory_relationship) ir
+ON
+w.primary_vendor_id = ir.vendor_id
+AND w.adjusted_inventory_id = ir.adjusted_inventory_id
+AND ra.storage_type = ir.storage_type
+WHERE
+--ra.available = 0
+ds.rn = 1
+--AND ra.division != 'Produce'
+--AND w.purchase_method = 'L'
+--AND purchase_status = 'A'
+--and product_sale_status = 'A'
+--and w.inventory_id = 20
+--and core_flag = 1
+--and dc_sku_flag ='0'
+--and direct_import_flag ='0'
+--availability_tier = '0'
+--w.assortment_role LIKE 'NonCore%'
+AND lc.rn_order = 1)
+select record_date,mq.product_id,is_purchase,mq.adjusted_inventory_id as inventory_id,inventory_title,primary_vendor_id,primary_vendor_title,secondary_vendor_id,supply_chain_analyst_id,supply_chain_analyst_name,is_forward_buy,outl,purchase_status,purchase_status_desc,live_code,dnr_code,next_delivery_date,assortment_role,purchase_method,testing_period,mq.visit_day,visit_week,product_title_en,product_ethnicity,division,parent_category,category,sub_category,availability_inventory_title,availability_supply_chain_analyst_id,availability_purchase_specialist,availability_primary_vendor,availability_primary_vendor_title,availability_available,availability_tier,availability_storage_type,availability_dc_sku_flag,availability_direct_import_flag,availability_core_flag,availability_product_sale_status,availability_product_sale_status_title,dedicated_user_id,timezone,split_ethnicity,vendor_id,storage_type,order_week,lead_time,order_date,delivery_date,rn_order,rn_delivery,supply_mode,connection_inventory_id,connection_inventory_type,
+lai.last_available_date, oos_reason
+from main_query mq left join last_available_input lai
+on mq.inventory_id = lai.inventory_id and mq.product_id = lai.product_id);
+drop table if exists input_metrics;
+create temporary table input_metrics as (
+select distinct del.product_id,del.inventory_id,
+mpw.primary_vendor_id, mpw.primary_vendor_title,
+del.vendor_id,mp.storage_type,
+del.order_date,del.delivery_date,lai.last_available_date, 'unknown' as oos_reason
+from Delivery_Calendar_Fc_sh del
+left join dc_sku_transfer_schedule cal on cal.product_id = del.product_id and cal.inventory_id = del.inventory_id
+left join dwd.mdse_product mp on del.product_id = mp.product_id
+left join last_available_input lai on del.product_id = lai.product_id and del.inventory_id = lai.inventory_id
+left join mdse_product_warehouse mpw on del.product_id = mpw.product_id and del.inventory_id =
+CASE
+WHEN mpw.inventory_id = 33 THEN 16
+WHEN mpw.inventory_id = 37 THEN 7
+ELSE mpw.inventory_id
+END
+);
+
+--second_po CTE
+--with second_po as (
+--select po.purchase_order_id as second_recent_po_id,po.product_id as second_recent_po_product_id,
+--po.inventory_id,max(po.est_delivery_date) as second_recent_delivery_date
+--from dws.sc_purchase_order_product po
+--inner join input_metrics on
+--po.product_id = input_metrics.product_id and po.inventory_id =input_metrics.inventory_id
+--where po.est_delivery_date < input_metrics.order_date - 1
+--group by 1,2,3
+--)
+--select * from second_po
+DROP TABLE IF EXISTS available_date_adjusted_df;
+CREATE TEMPORARY TABLE available_date_adjusted_df AS (
+select df.product_id,ism.warehouse_number as inventory_id,
+min(df.sales_org_id) as sales_org_id,
+min(im.order_date) as order_date,
+min(im.last_available_date) as last_available_date,
+min(df.snapshot_date) as snapshot_date,
+min(df.day) as date_demand_forecasted_for,
+min(df.qty_final) as qty_forecasted
+from dwd.df_demand_forecast_daily_snapshot63 df inner join
+  wms_inv_sales_mapping ism on df.sales_org_id = ism.sales_org_id
+inner join input_metrics im on
+im.product_id = df.product_id and im.inventory_id = ism.warehouse_number and im.last_available_date = df.day
+WHERE
+--getting forecast at time of order_date for last_available_date at a daily level when order_date is before last_available_date
+(
+im.order_date < im.last_available_date
+AND df.snapshot_date - order_date <= 7 and df.snapshot_date - order_date > 0
+)
+OR
+--getting four week forecast for last_available_date when last_available_date is before most recent order_date
+(
+last_available_date < im.order_date
+AND (last_available_date - df.snapshot_date > 28 and last_available_date - df.snapshot_date < 35))
+group by 1,2
+);
+
+DROP TABLE IF EXISTS order_date_entire_po;
+CREATE TEMPORARY TABLE order_date_entire_po AS (
+SELECT
+ranked_data.inventory_id,
+ranked_data.product_id,
+ranked_data.purchase_order_id,
+ranked_data.po_issue_date
+FROM (
+SELECT
+im.inventory_id,
+im.product_id,
+po.po_issue_date,
+po.purchase_order_id,
+ROW_NUMBER() OVER (
+PARTITION BY im.inventory_id, im.product_id
+ORDER BY po.po_issue_date DESC
+) AS row_num
+FROM
+input_metrics im
+INNER JOIN
+dws.sc_purchase_order po
+ON
+po.inventory_id = im.inventory_id
+AND po.po_issue_date = im.order_date
+) AS ranked_data
+WHERE ranked_data.row_num = 1
+);
+
+DROP TABLE IF EXISTS check_buyer_incoming_po;
+CREATE TEMPORARY TABLE check_buyer_incoming_po AS (
+SELECT inventory_id,
+product_id,
+min(purchase_order_id) as purchase_order_id,
+min(est_delivery_date) as est_delivery_date,
+min(item_receipt_date) as item_receipt_date,
+min(receipt_date) as receipt_date
+FROM dws.sc_purchase_order_product
+WHERE (inventory_id, product_id, est_delivery_date) IN (
+SELECT inventory_id,
+product_id,
+MAX(est_delivery_date) AS max_est_delivery_date
+FROM dws.sc_purchase_order_product
+WHERE item_receipt_date IS NULL
+AND est_delivery_date >=        '2026-01-15'-1 - INTERVAL '8 days'
+GROUP BY inventory_id, product_id
+)
+AND item_receipt_date IS NULL
+AND est_delivery_date >=        '2026-01-15'-1 - INTERVAL '8 days'
+group by inventory_id,product_id
+);
+
+DROP TABLE IF EXISTS second_recent_po;
+CREATE TEMPORARY TABLE second_recent_po AS
+WITH RankedPO AS (
+SELECT
+pop.purchase_order_id,
+pop.product_id,
+pop.inventory_id,
+pop.purchase_order_id AS purchase_order_id_second,
+pop.product_id AS product_id_second,
+pop.inventory_id AS inventory_id_second,
+pop.po_issue_date as second_po_creation_date,
+pop.item_receipt_date AS item_receipt_date_second,
+pop.est_delivery_date AS est_delivery_date_second,
+pop.receipt_date as po_receipt_date_second,
+pop.est_delivery_date as second_est_delivery_date,
+ROW_NUMBER() OVER (
+PARTITION BY pop.product_id, pop.inventory_id
+ORDER BY pop.est_delivery_date DESC
+) AS rn_second
+FROM
+dws.sc_purchase_order_product pop
+inner JOIN
+Delivery_Calendar_Fc_sh rdc ON pop.product_id = rdc.product_id AND pop.inventory_id = rdc.inventory_id
+WHERE
+pop.po_issue_date < rdc.order_date-2 and pop.po_issue_date > rdc.order_date-42
+)
+SELECT
+purchase_order_id,
+product_id,
+inventory_id,
+purchase_order_id_second,
+product_id_second,
+inventory_id_second,
+second_po_creation_date,
+item_receipt_date_second,
+second_est_delivery_date,
+po_receipt_date_second,
+est_delivery_date_second
+FROM
+RankedPO
+WHERE
+rn_second = 1;
+-- Filtering for the most recent records
+--select * from second_recent_po;
+------Final Table
+-----Create reason codes logic
+---Create the flow of tables, joins
+---Prirtize which reason codes go first
+---Check the unckown reason codes left in the end
+---Add columns to the final table as per required
+--select distinct OOS_REASON ,count(distinct product_id) from sandbox.final_oos_reason group by 1
+DROP TABLE IF EXISTS most_recent_po;
+create temporary TABLE most_recent_po AS (
+SELECT pop.purchase_order_id,pop.product_id,pop.inventory_id,pop.po_issue_date as po_creation_date, pop.est_delivery_date as po_est_delivery_date,pop.receipt_date as po_receiving_date, pop.item_receipt_date,
+sum(pop.original_quantity*pop.quantity_per_unit) as po_requested_qty, sum(pop.receipt_quantity) as po_received_qty
+FROM dws.sc_purchase_order_product pop
+INNER JOIN Delivery_Calendar_Fc_sh rdc
+ON pop.product_id = rdc.product_id AND pop.inventory_id = rdc.inventory_id AND pop.po_issue_date = rdc.order_date
+--WHERE visit_day =        '2026-01-15'-1
+group by 1,2,3,4,5,6,7
+);
+
+DROP TABLE IF EXISTS most_recent_manual_po;
+CREATE TEMPORARY TABLE most_recent_manual_po AS (
+WITH filtered_data AS (
+SELECT
+pop.purchase_order_id,
+pop.product_id,
+pop.inventory_id,
+pop.po_issue_date,
+pop.est_delivery_date,
+pop.receipt_date,
+pop.item_receipt_date,
+la.last_available_date,
+rdc.lead_time
+FROM
+dws.sc_purchase_order_product pop
+INNER JOIN
+Delivery_Calendar_Fc_sh rdc
+ON pop.product_id = rdc.product_id
+AND pop.inventory_id = rdc.inventory_id
+AND pop.po_issue_date != rdc.order_date
+INNER JOIN
+last_available_input la
+ON rdc.product_id = la.product_id
+AND rdc.inventory_id = la.inventory_id
+WHERE
+pop.po_issue_date > rdc.order_date and
+pop.po_issue_date + rdc.lead_time < la.last_available_date
+)
+SELECT
+MIN(purchase_order_id) as purchase_order_id,
+MIN(product_id) AS product_id,
+MIN(inventory_id) AS inventory_id,
+MIN(po_issue_date) AS manual_po_creation_date,
+MIN(est_delivery_date) AS manual_po_est_delivery_date,
+MIN(receipt_date) AS manual_po_receiving_date,
+MIN(item_receipt_date) AS manual_item_receipt_date,
+MIN(last_available_date) AS manual_last_available_date,
+MIN(lead_time) AS lead_time
+FROM
+filtered_data
+GROUP BY
+product_id, inventory_id
+);
+
+DROP TABLE IF EXISTS backup_demand;
+CREATE TEMPORARY TABLE backup_demand AS (
+SELECT
+CAST(df.week_start_date AS date) AS week_start,
+ism.warehouse_number AS inventory_id,
+m.sales_region_id,
+df.product_id,
+df.rec_create_time,
+df.rec_update_time,
+la.last_available_date,
+       '2026-01-15'-1 AS visit_day,
+case when sum(df.promolift_qty) > 0 then 'promotion sku' else 'not promotion sku' end as promotion_sku_status,
+sum(df.promolift_qty) as promo_lift_qty,
+SUM(df.qty + COALESCE(df.promolift_qty, 0))/7 AS df_qty
+FROM dwd.sc_demand_forecast df
+LEFT JOIN dwd.mdse_product p ON p.product_id = df.product_id
+LEFT JOIN metrics.sales_org_price_region_mapping m ON m.sales_org_id = df.sales_org_id
+LEFT JOIN   wms_inv_sales_mapping ism ON ism.sales_org_id = df.sales_org_id
+--left join last_available_input la on df.product_id = la.product_id and la.inventory_id = ism.warehouse_number
+inner join last_available_input la on df.product_id = la.product_id and la.inventory_id = ism.warehouse_number
+WHERE
+(df.qty + COALESCE(df.promolift_qty, 0)) > 0 -- Filter for positive quantity
+AND df.week_start_date >= last_available_date- INTERVAL '7 days'
+AND df.week_start_date <= last_available_date
+GROUP BY
+CAST(df.week_start_date AS date), m.sales_region_id, df.product_id, ism.warehouse_number, la.last_available_date,df.rec_create_time,df.rec_update_time
+);
+
+DROP TABLE IF EXISTS backup_sales;
+CREATE TEMPORARY TABLE backup_sales AS(
+SELECT
+op.inventory_id,
+op.product_id,
+sum(op.quantity) AS sold_qty
+FROM input_metrics im
+left join metrics.order_product op on im.product_id = op.product_id and im.inventory_id = op.inventory_id
+LEFT JOIN last_available_input la
+ON la.product_id = im.product_id
+AND la.inventory_id = im.inventory_id
+WHERE op.order_biz_type IN ('grocery', 'alcohol')
+AND op.payment_mode = 'F'
+and op.order_day = la.last_available_date
+--AND op.order_day BETWEEN (la.last_available_date - INTERVAL '7 days') AND la.last_available_date
+GROUP BY op.inventory_id, op.product_id);
+
+DROP TABLE IF EXISTS fcst_sales;
+CREATE TEMPORARY TABLE fcst_sales AS (
+SELECT
+im.inventory_id,
+im.product_id,
+irs.order_quantity,
+irs.sellable_quantity,
+irs.target_quantity,
+max(bd.promo_lift_qty) as promo_lift_qty,
+MIN(bd.rec_create_time) AS earliest_inputted_demand_date,
+CASE
+when min(bs.sold_qty) is not null then min(bs.sold_qty)
+--WHEN MIN(irs.avg_daily_sales) IS NULL THEN MIN(bs.sold_qty)
+ELSE MIN(irs.avg_daily_sales)
+END AS avg_daily_sales,
+CASE
+--when min(fwdf.qty_demand_forecasted) is not null then min(fwdf.qty_demand_forecasted)
+when min(laf.qty_forecasted) is not null then min(laf.qty_forecasted)
+WHEN MIN(irs.avg_daily_demand_forecast) IS NULL THEN MIN(bd.df_qty)
+ELSE MIN(irs.avg_daily_demand_forecast)
+END AS avg_daily_demand_forecast
+FROM input_metrics im
+left join available_date_adjusted_df laf on laf.product_id = im.product_id and laf.inventory_id = im.inventory_id
+LEFT JOIN last_available_input la ON
+im.product_id = la.product_id AND im.inventory_id = la.inventory_id
+--left join four_week_df fwdf on im.product_id = fwdf.product_id and im.inventory_id = fwdf.inventory_id
+LEFT JOIN   irs_network_product_calculation irs ON
+im.product_id = irs.product_id AND im.inventory_id = irs.facility_id AND irs.snapshot_date = la.last_available_date
+LEFT JOIN backup_demand bd ON
+im.product_id = bd.product_id AND im.inventory_id = bd.inventory_id
+LEFT JOIN backup_sales bs ON
+im.product_id = bs.product_id AND im.inventory_id = bs.inventory_id
+GROUP BY im.product_id, im.inventory_id,irs.order_quantity,irs.sellable_quantity,irs.target_quantity
+);
+
+DROP TABLE IF EXISTS promo_check;
+CREATE TEMPORARY TABLE promo_check AS (
+SELECT
+lai.product_id,
+lai.inventory_id,
+min(lai.last_available_date)::date as last_available_date,
+min(ppe.product_start_time)::date as product_start_time,
+min(ppe.product_end_time)::date as product_end_time,
+min(ppe.is_lightning_deal) as is_lightning_deal,
+min(ppe.rec_create_time)::date as rec_create_time,
+min(ppe.rec_update_time)::date as rec_update_time
+FROM
+dwd.pps_promotion_event_product ppe
+LEFT JOIN
+  wms_inv_sales_mapping ism
+ON ism.sales_org_id = ppe.sales_org_id
+INNER JOIN
+last_available_input lai
+ON ppe.product_id = lai.product_id
+AND ism.warehouse_number = lai.inventory_id
+left join input_metrics im on ppe.product_Id = im.product_id and ism.warehouse_number = im.inventory_id
+WHERE
+ppe.product_start_time <= lai.last_available_date and
+ppe.product_start_time >= im.order_date
+group by lai.product_id,lai.inventory_id
+);
+
+drop table if exists irs_info_zero_order_qty;
+create temporary table irs_info_zero_order_qty as (
+select ima.product_id,ima.inventory_id,ima.order_date,irs.target_quantity,irs.sellable_quantity,irs.order_quantity from
+input_metricsa ima left join   irs_network_product_calculation irs on
+ima.product_id = irs.product_id and ima.inventory_id = irs.facility_id and ima.order_date = irs.snapshot_date
+);
+
+DROP TABLE IF EXISTS most_recent_pr;
+CREATE TEMPORARY TABLE most_recent_pr AS
+WITH ranked_pr AS (
+SELECT
+id,
+inventory_id,
+connection_inventory_id AS storage_id,
+connection_inventory_type,
+vendor_id,
+product_id,
+qty,
+quantity_per_unit,
+calendar_type,
+order_date,
+eta_connection_date,
+eta_final_date,
+status,
+source,
+po_id,
+rec_creator_id,
+rec_create_time,
+rec_update_time,
+auto_proposal,
+ROW_NUMBER() OVER (
+PARTITION BY product_id, inventory_id, storage_id, vendor_id, order_date
+ORDER BY rec_update_time DESC
+) AS row_num
+FROM    pr_purchase_request
+WHERE status = 'P' -- Filter rows where status equals 'P'
+)
+SELECT
+id,
+inventory_id,
+storage_id,
+connection_inventory_type,
+vendor_id,
+product_id,
+qty,
+quantity_per_unit,
+calendar_type,
+order_date,
+eta_connection_date,
+eta_final_date,
+status,
+source,
+po_id,
+rec_creator_id,
+rec_create_time,
+rec_update_time,
+auto_proposal
+FROM ranked_pr
+WHERE row_num = 1;
+
+drop table if exists config_check;
+create temporary table config_check as (
+SELECT DISTINCT
+'2026-01-15' - 1 AS snapshot_date,
+ima.product_id,
+ima.inventory_id,
+pat.weee_buyer_name,
+mp.sku_owner,
+mpw.purchase_method,
+mpw.primary_vendor_id AS vendor_id,
+mp.storage_type,
+CASE
+WHEN dr.dedicated_user_id IS NULL AND dc.order_weekday IS NULL AND ir.supply_mode IS NULL
+THEN 'Dedicated Relationship, Delivery Calendar, and Inventory Relation Errors'
+WHEN dr.dedicated_user_id IS NULL AND dc.order_weekday IS NULL
+THEN 'Dedicated Relationship and Delivery Calendar Errors'
+WHEN dr.dedicated_user_id IS NULL AND ir.supply_mode IS NULL
+THEN 'Dedicated Relationship and Inventory Relation Errors'
+WHEN dc.order_weekday IS NULL AND ir.supply_mode IS NULL
+THEN 'Delivery Calendar and Inventory Relation Errors'
+WHEN dr.dedicated_user_id IS NULL
+THEN 'Dedicated Relationship Error'
+WHEN dc.order_weekday IS NULL
+THEN 'Delivery Calendar Error'
+WHEN ir.supply_mode IS NULL
+THEN 'Inventory Relation Error'
+ELSE 'No Issue'
+END AS config_issue
+FROM
+input_metrics ima
+left join mdse_product_warehouse mpw on
+ima.product_id = mpw.product_id and ima.inventory_id =
+CASE
+WHEN mpw.inventory_id = 33 THEN 16
+WHEN mpw.inventory_id = 37 THEN 7
+ELSE mpw.inventory_id
+END
+LEFT JOIN
+dwd.mdse_product mp
+ON mpw.product_id = mp.product_id
+LEFT JOIN
+   sc_pr_config_dedicated_relation dr
+ON mpw.primary_vendor_id = dr.vendor_id
+AND mp.storage_type = dr.storage_type
+AND mpw.inventory_id = dr.warehouse_id
+LEFT JOIN
+ sc_pr_config_delivery_calendar dc
+ON mpw.primary_vendor_id = dc.vendor_id
+AND mp.storage_type = dc.storage_type
+AND mpw.inventory_id = dc.inventory_id
+LEFT JOIN
+ sc_pr_config_inventory_relation ir
+ON mpw.primary_vendor_id = ir.vendor_id
+AND mp.storage_type = ir.storage_type
+LEFT JOIN
+metrics.product_availability pat
+ON mpw.product_id = pat.product_id
+AND mpw.inventory_id = pat.inventory_id
+AND pat.visit_day = '2026-01-15' - 1
+WHERE
+--mpw.purchase_status_desc = 'Live'
+mp.division NOT IN ('Produce', 'Packaging Material') and
+mpw.purchase_method = 'L' and
+(
+dr.dedicated_user_id IS NULL OR
+dc.order_weekday IS NULL OR
+ir.supply_mode IS NULL
+)
+ORDER BY
+mpw.product_id, mpw.inventory_id
+);
+
+drop table if exists local_to_dc_oos_reason;
+create temporary table local_to_dc_oos_reason as (
+select distinct im.product_id,im.inventory_id,
+im.order_date,im.delivery_date,
+pr.qty as pr_qty,dml.date_made_live,
+irs.avg_daily_sales,irs.avg_daily_demand_forecast,
+       '2026-01-15'-1 - la.last_available_date as days_oos,
+pro.rec_create_time as date_promotion_demand_inputted,pro.product_start_time as promotion_start_date, pro.product_end_time as promotion_end_date,
+la.weee_buyer_name,
+im.primary_vendor_id,im.primary_vendor_title,
+uni.sold_dc_mapping, uni.df_dc_mapping,
+case when pro.product_id is not null then 'promotion_sku' else 'non_promotion_sku' end as promotion_sku_status,irs.promo_lift_qty,
+inv.order_quantity as suggested_order_date_order_quantity,inv.target_quantity as order_date_target_quantity,inv.sellable_quantity as order_date_sellable_quantity,
+irspr.irs_pr_submitted_quantity as irs_pr_submitted_quantity, irspr.irs_pr_submission_status as irs_pr_submission_status,irspr.irs_pr_id as irs_pr_id,
+la.order_quantity as last_available_order_quantity,la.target_quantity as last_available_target_quantity,la.sellable_quantity as last_available_sellable_quantity,
+mr.purchase_order_id as most_recent_purchase_order_id,mr.po_creation_date as most_recent_po_date,mr.po_requested_qty as most_recent_po_requested_qty,
+mr.po_received_qty as most_recent_po_received_qty,mr.po_est_delivery_date as most_recent_po_delivery_date, mr.po_receiving_date as most_recent_entire_po_receiving_date,mr.item_receipt_date as most_recent_po_sku_receipt_date,
+rmp.purchase_order_id as most_recent_manual_purchase_order_id,manual_po_creation_date,manual_po_est_delivery_date,manual_po_receiving_date,manual_item_receipt_date,manual_last_available_date,
+sr.purchase_order_id_second as second_most_recent_purchase_order_id,sr.second_po_creation_date,sr.second_est_delivery_date,sr.po_receipt_date_second,sr.item_receipt_date_second, im.last_available_date,
+CASE
+--when im.inventory_id = 16 and im.purchase_method = 'L' and im.is_purchase = 'N' then
+--'Supplier - DC Issue: Out of scope - Clifton SKU where purchasing method is L and flag is off'
+when dc_lane.calculation_tags like '%VENDOR%' and dc_lane.initial_quantity > 0 and dc_lane.quantity = 0
+then 'Supplier to DC leg: MOQ Issue - No order submitted due to MOQ'
+WHEN most_recent_po_sku_receipt_date IS NULL AND most_recent_entire_po_receiving_date IS NOT NULL
+THEN 'Supplier to DC Issue: No Transferrable DC Inventory due to Vendor OOS - last PO SKU not received - but other SKU received'
+when most_recent_po_sku_receipt_date IS NULL AND most_recent_entire_po_receiving_date IS NULL and mr.po_creation_date is not null
+then 'Supplier to DC Issue: No Transferrable DC Inventory due to Vendor OOS - Entire PO Not Received'
+when od.purchase_order_id is not null and mr.purchase_order_id is null and irspr.irs_pr_submission_status = 'SUCCESS' then
+'Supplier to DC Issue: No Transferrable DC Inventory due to Vendor OOS - Vendor deleted SKU from PO'
+when most_recent_po_requested_qty < pr.qty
+then 'Supplier to DC Issue: No Transferrable DC Inventory due to Possible vendor shortage issue - Last PO qty less than pr qty, '
+when rmp.manual_item_receipt_date is null and rmp.product_id is not null
+then 'Supplier to DC Issue: No Transferrable DC Inventory due to Manual PO SKU with enough lead time not received'
+when mr.po_receiving_date > mr.po_est_delivery_date
+then 'Supplier to DC Issue: No Transferrable DC Inventory due to PO arrived late'
+when sr.item_receipt_date_second is null and sr.purchase_order_id_second is not null
+then 'Supplier to DC Issue: No Transferrable DC Inventory due to Vendor OOS - 2nd recent PO SKU not received, not enough time to catch up'
+when im.order_date < earliest_inputted_demand_date then
+'Supplier to DC leg: No Transferrable DC Inventory due to No forecasted demand during last order date'
+when inv.order_quantity > 0 and mr.product_id is null then
+'Supplier to DC Issue: No PO created on order date due to Vendor OOS'
+--when (dml.date_made_live > im.order_date) then
+--'SKU Made Live too recently to go through PR/PO cycle'
+when irspr.irs_pr_submission_status = 'FAILED'
+then 'Supplier to DC Issue: No Transferrable DC Inventory due to error in missed PR-PO conversion in last order cycle'
+--WHEN irs.avg_daily_sales = 0 THEN 'unknown'
+when pro.product_id is not null and pro.rec_create_time > im.order_date
+then 'Supplier to DC Issue: No Transferrable DC Inventory due to Promotion SKU Demand inputted after order date'
+when ((uni.sold_dc_mapping-uni.df_dc_mapping)/nullif(uni.sold_dc_mapping,0) > 0.1) then 'Supplier to DC Issue: DC OOS due to Demand Underforecasted'
+--or
+-- (irs.sellable_quantity >= irs.target_quantity and irs.sellable_quantity is not null ) or
+--(la.target_quantity/2 >= inv.target_quantity) or
+--zoq.order_quantity = 0 and zoq.target_quantity > 0
+--then 'Supplier to DC Issue: DC OOS due to Demand Underforecasted'
+when inv.product_id is null and im.order_date is not null
+then 'Supplier to DC Issue: No Transferrable DC Inventory due to Config Error - Not in IRS Previously'
+--when cc.config_issue != 'No Issue' and cc.config_issue is not null then 'Supplier to DC Issue: Config Error'
+ELSE 'Supplier to DC Issue: No Transferrable DC Inventory - Reason Unknown' -- If oos_reason is not 'unknown', return the original oos_reason
+END AS oos_reason
+from input_metrics im
+left join
+most_recent_po mr on im.product_id = mr.product_id and im.inventory_id = mr.inventory_id and mr.po_creation_date = im.order_date
+left join second_recent_po sr on sr.product_id = im.product_id and sr.inventory_id = im.inventory_id
+left join order_date_entire_po od on im.product_id = od.product_id and im.inventory_id = od.inventory_id
+left join irspr_inventory_adjusted irspr on im.product_id = irspr.product_id and im.inventory_id = irspr.facility_id_adjusted and im.order_date = irspr.order_date
+left join inv_inventory_adjusted inv on im.product_Id = inv.product_id and im.inventory_id = inv.facility_id_adjusted and im.order_date = inv.snapshot_date
+--left join    pr_purchase_request pr on im.product_id = pr.product_id and im.inventory_id = pr.inventory_id and im.order_date = pr.order_date and pr.vendor_id = im.vendor_id
+left join most_recent_pr pr on im.product_id = pr.product_id and im.inventory_id = pr.inventory_id and im.order_date = pr.order_date and pr.vendor_id = im.vendor_id
+left join fcst_sales irs on
+im.product_id = irs.product_id and im.inventory_id = irs.inventory_id
+left join most_recent_manual_po rmp on im.product_id = rmp.product_id and im.inventory_id = rmp.inventory_id
+left join date_made_live dml on im.product_id = dml.product_id and im.inventory_id = dml.inventory_id
+left join last_available_input la on im.product_id = la.product_id and im.inventory_id = la.inventory_id
+left join irs_info_zero_order_qty zoq on im.product_id = zoq.product_id and im.inventory_id = zoq.inventory_id
+left join inv_inventory_adjusteda inva on im.product_Id = inva.product_id and im.inventory_id = inva.facility_id_adjusted
+left join promo_check pro on pro.product_id = im.product_id and pro.inventory_id = im.inventory_id
+left join config_check cc on cc.product_id and im.product_id and cc.inventory_id = im.inventory_id
+LEFT JOIN mdse_product_warehouse mpw
+ON mpw.product_id = im.product_id
+AND CASE
+WHEN mpw.inventory_id = 37 THEN 7
+WHEN mpw.inventory_id = 33 THEN 16
+ELSE mpw.inventory_id
+END = im.inventory_id
+left join unique_dc_fcst_sales uni on im.product_id = uni.product_id and im.inventory_id = uni.priority_1_dc_id
+left join dwd.irs_network_product_destination_replenishment_lane dc_lane on dc_lane.product_id = im.product_id and dc_lane.destination_facility_id = im.inventory_id and dc_lane.snapshot_date = im.order_date
+);
+
+
+
+
+--End of Zhe's code
+/*
+drop table if exists irspr_inventory_adjusted;
+create temporary table irspr_inventory_adjusted as (
+select product_id,
+case
+when irspr.facility_id = 37 then 7
+when irspr.facility_id = 33 then 16
+else irspr.facility_id end as facility_id_adjusted,
+irspr.submitted_quantity as irs_pr_submitted_quantity, irspr.submission_status as irs_pr_submission_status,irspr.purchase_request_id as irs_pr_id,
+irspr.order_date,irspr.submitted_quantity,irspr.submission_status,irspr.purchase_request_id,irspr.vendor_id,irspr.delivery_date
+from  irs_network_purchase_order_product irspr
+);
+select * from irspr_inventory_adjusted limit 2;
+*/
+DROP TABLE IF EXISTS irspr_inventory_adjusted;
+CREATE TEMPORARY TABLE irspr_inventory_adjusted AS
+WITH ranked_irspr AS (
+SELECT
+product_id,
+CASE
+WHEN irspr.facility_id = 37 THEN 7
+WHEN irspr.facility_id = 33 THEN 16
+ELSE irspr.facility_id
+END AS facility_id_adjusted,
+irspr.submitted_quantity AS irs_pr_submitted_quantity,
+irspr.submission_status AS irs_pr_submission_status,
+irspr.purchase_request_id AS irs_pr_id,
+irspr.order_date,
+irspr.vendor_id,
+irspr.delivery_date,
+ROW_NUMBER() OVER (
+PARTITION BY vendor_id,
+CASE
+WHEN irspr.facility_id = 37 THEN 7
+WHEN irspr.facility_id = 33 THEN 16
+ELSE irspr.facility_id
+END,
+product_id,
+order_date
+ORDER BY submitted_quantity DESC
+) AS row_num
+FROM  irs_network_purchase_order_product irspr
+)
+SELECT
+product_id,
+facility_id_adjusted,
+irs_pr_submitted_quantity,
+irs_pr_submission_status,
+irs_pr_id,
+order_date,
+vendor_id,
+delivery_date
+FROM ranked_irspr
+WHERE row_num = 1;
+
+
+drop table if exists inv_inventory_adjusted;
+create temporary table inv_inventory_adjusted as (
+select inv.product_id,
+case
+when inv.facility_id = 37 then 7
+when inv.facility_id = 33 then 16
+else inv.facility_id end as facility_id_adjusted,
+inv.order_quantity as suggested_order_date_order_quantity,inv.target_quantity as order_date_target_quantity,inv.sellable_quantity as order_date_sellable_quantity,
+inv.snapshot_date,inv.order_quantity,inv.target_quantity,inv.sellable_quantity, inv.available_quantity
+from   irs_network_product_calculation inv
+);
+
+drop table if exists inv_inventory_adjusteda;
+create temporary table inv_inventory_adjusteda as (
+select distinct inv.product_id,
+case
+when inv.facility_id = 37 then 7
+when inv.facility_id = 33 then 16
+else inv.facility_id end as facility_id_adjusted
+from   irs_network_product_calculation inv
+);
+
+drop table if exists Red_Shift_Delivery_Calendar_Fc_sha ;
+create temporary table Red_Shift_Delivery_Calendar_Fc_sha as (
+select npop.vendor_id,npop.product_id,npop.facility_id_adjusted as inventory_id,mp.storage_type,npop.order_date,
+npop.delivery_date - npop.order_date as lead_time, npop.delivery_date,
+min(pr.order_cycle) as order_week,
+row_number() over(partition by npop.facility_id_adjusted, npop.product_id order by order_date desc) as rn_order,
+row_number() over(partition by npop.facility_id_adjusted, npop.product_id order by delivery_date desc) as rn_delivery
+from irspr_inventory_adjusted npop
+left join dwd.mdse_product mp on npop.product_id = mp.product_id
+left join  sc_pr_config_delivery_calendar pr on
+pr.inventory_id = npop.facility_id_adjusted and pr.storage_type = mp.storage_type and pr.vendor_id = npop.vendor_id
+where delivery_date <=        '2026-01-15'-1
+group by 1,2,3,4,5,6,7
+);
+
+drop table if exists Red_Shift_Delivery_Calendar_Fc_sh ;
+create temporary table Red_Shift_Delivery_Calendar_Fc_sh as (
+select * from Red_Shift_Delivery_Calendar_Fc_sha
+where rn_order=1);
+
+
+
+drop table if exists Delivery_Calendar_Fc_sh ;
+create temporary table Delivery_Calendar_Fc_sh as (
+WITH RECURSIVE NS (n) AS (
+SELECT 1
+UNION ALL
+SELECT n + 1
+FROM NS
+WHERE n < 52)
+, t1 as (
+select
+distinct
+b.vendor_id
+, d.product_id
+, bb.ref_inventory_id as inventory_id
+, b.storage_type
+, TRIM(
+SPLIT_PART(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',', NS.n)) :: int AS order_week
+, b.lead_time
+, c.week_begin_date + b.order_weekday as order_date
+, c.week_begin_date + b.order_weekday + b.lead_time as delivery_date
+from NS
+inner join
+(select
+distinct
+a.vendor_id
+, a.inventory_id,
+split_part(a.storage_type, ',', s.id) as storage_type
+, a.order_weekday
+, a.frequency
+, a.lead_time
+, a.order_cycle
+from  sc_pr_config_delivery_calendar a
+, (select 1 as id union all select 2 union all select 3 union all select 4) s
+where 1=1
+and a.status = 'A'
+and split_part(a.storage_type, ',', s.id) != '') b
+on length(b.order_cycle) > 2
+and NS.n <= REGEXP_COUNT(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',') + 1
+and length(b.order_cycle) > 2
+left join  inventory bb
+on b.inventory_id = bb.inventory_id
+left join
+(select
+distinct
+week_begin_date
+, full_week_number
+from dim.calendar
+where year_id = 2025
+and day_of_week > 0
+and cal_date not in ('2023-01-01', '2023-12-31')) c
+on c.full_week_number
+=
+(TRIM(
+SPLIT_PART(
+right(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+,length(
+case b.order_cycle when 'Odd weeks' then 'Weeks 1,3,5,7,9,11,13,15,17,19,21,23,25,27,29,31,33,35,37,39,41,43,45,47,49,51'
+when 'Every week' then 'Weeks 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52'
+when 'Even weeks' then 'Weeks 2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52'
+else b.order_cycle end
+)-6), ',', NS.n)) :: int)
+left join (select a.*, b.storage_type from mdse_product_warehouse a left join dwd.mdse_product b using(product_id)) d
+on b.inventory_id = d.inventory_id
+and b.vendor_id = d.primary_vendor_id
+and b.storage_type = d.storage_type
+)
+select
+*
+, row_number() over(partition by inventory_id, product_id order by order_date desc) as rn_order
+, row_number() over(partition by inventory_id, product_id order by delivery_date desc) as rn_delivery
+from t1
+where
+--order_date <        '2026-01-15'-1
+delivery_date <=        '2026-01-15'-1
+);
+--select * from Delivery_Calendar_Fc_sh where product_id = 1311 and inventory_id = 25;
+----Create input metrics table
+--1.add delivery calendar info toChange the reason code case statement in zhe's query
+--2.Zhe's query, change the joins
+
+DROP TABLE IF EXISTS last_available_input;
+CREATE TEMPORARY TABLE last_available_input AS (
+WITH last_available AS (
+select
+--CASE
+--WHEN inventory_id = 16 THEN 33
+--WHEN inventory_id = 7 THEN 37
+--ELSE inventory_id
+--END AS
+inventory_id,
+a.product_id,
+MAX(a.visit_day) AS last_available_date,
+MAX(a.product_sale_status_title) as product_sale_status_title,
+MAX(a.weee_buyer_name) as weee_buyer_name,
+MAX(irs.target_quantity) as target_quantity,
+max(irs.sellable_quantity) as sellable_quantity,
+max(irs.order_quantity) as order_quantity,
+MAX(irs.avg_daily_sales) as avg_daily_sales,
+MAX(irs.avg_daily_demand_forecast) as avg_daily_demand_forecast
+FROM metrics.product_availability a
+LEFT JOIN dwd.mdse_product b ON a.product_id = b.product_id
+LEFT JOIN   wms_inv_sales_mapping c ON a.sales_org_id = c.sales_org_id AND b.storage_type = c.storage_type
+left join   irs_network_product_calculation irs on a.product_id = irs.product_id and a.inventory_id = irs.facility_id and a.visit_day = irs.snapshot_date
+WHERE a.available > 0 and a.visit_day <=        '2026-01-15'-1
+GROUP BY a.inventory_id, a.product_id
+)
+SELECT *
+FROM last_available
+);
+
+drop table if exists date_made_live;
+create temporary table date_made_live as
+(
+select product_id,inventory_id,product_sale_status_title,max(visit_day)+1 as date_made_live from metrics.product_availability pa
+where pa.product_sale_status != 'A' and pa.product_sale_status is not null
+group by product_id,inventory_id,product_sale_status_title
+);
+--select * from last_available_input where inventory_id = 20 and product_id = 31053;
+--select * from input_metrics where inventory_id = 20 and product_id = 31053;
+--select * from metrics.product_availability where inventory_id = 20 and product_id = 31053
+--order by visit_day desc limit 500
+drop table if exists availability_zero;
+create temporary table availability_zero as
+select pa.product_id,pa.inventory_id,pa.visit_day,pa.storage_type,mpw.primary_vendor_id,sum(available)
+from metrics.product_availability pa
+left join mdse_product_warehouse mpw on
+pa.product_id = mpw.product_id and
+pa.inventory_id = mpw.inventory_id
+where
+--available = 0 and
+visit_day =        '2026-01-15'-1
+group by 1,2,3,4,5;
+--select * from    sc_pr_config_dedicated_relation spcdr limit 2;
+drop table if exists split_inventory_relationship;
+create temporary table split_inventory_relationship as (
+WITH RECURSIVE split_storage_type (id, vendor_id, inventory_id, storage_type, remaining_storage_type, supply_mode, connection_inventory_id, connection_inventory_type) AS (
+SELECT
+id,
+vendor_id,
+inventory_id,
+LEFT(storage_type, POSITION(',' IN storage_type) - 1) AS storage_type,
+RIGHT(storage_type, LENGTH(storage_type) - POSITION(',' IN storage_type)) AS remaining_storage_type,
+supply_mode,
+connection_inventory_id,
+connection_inventory_type
+FROM  sc_pr_config_inventory_relation
+WHERE POSITION(',' IN storage_type) > 0
+UNION ALL
+SELECT
+id,
+vendor_id,
+inventory_id,
+CASE
+WHEN POSITION(',' IN remaining_storage_type) > 0 THEN LEFT(remaining_storage_type, POSITION(',' IN remaining_storage_type) - 1)
+ELSE remaining_storage_type
+END AS storage_type,
+CASE
+WHEN POSITION(',' IN remaining_storage_type) > 0 THEN RIGHT(remaining_storage_type, LENGTH(remaining_storage_type) - POSITION(',' IN remaining_storage_type))
+ELSE NULL
+END AS remaining_storage_type,
+supply_mode,
+connection_inventory_id,
+connection_inventory_type
+FROM split_storage_type
+WHERE remaining_storage_type IS NOT NULL
+),
+split_ir as (
+SELECT
+id,
+vendor_id,
+inventory_id,
+storage_type,
+supply_mode,
+connection_inventory_id,
+connection_inventory_type
+FROM split_storage_type
+UNION ALL
+SELECT
+id,
+vendor_id,
+inventory_id,
+storage_type,
+supply_mode,
+connection_inventory_id,
+connection_inventory_type
+FROM  sc_pr_config_inventory_relation
+WHERE POSITION(',' IN storage_type) = 0
+ORDER BY id, storage_type)
+select * from split_ir);
+
+
+
+
+drop table if exists input_metricsa;
+create temporary table input_metricsa as
+( WITH RECURSIVE split_ethnicity(id, vendor_id, dedicated_user_id, storage_type, timezone, warehouse_id, ethnicity, rest) AS (
+SELECT
+id,
+vendor_id,
+dedicated_user_id,
+storage_type,
+timezone,
+warehouse_id,
+LEFT(ethnicity_str, POSITION(',' IN ethnicity_str) - 1) AS ethnicity,
+RIGHT(ethnicity_str, LENGTH(ethnicity_str) - POSITION(',' IN ethnicity_str)) AS rest
+FROM
+   sc_pr_config_dedicated_relation
+WHERE
+POSITION(',' IN ethnicity_str) > 0
+UNION ALL
+SELECT
+id,
+vendor_id,
+dedicated_user_id,
+storage_type,
+timezone,
+warehouse_id,
+CASE
+WHEN POSITION(',' IN rest) > 0 THEN LEFT(rest, POSITION(',' IN rest) - 1)
+ELSE rest
+END,
+CASE
+WHEN POSITION(',' IN rest) > 0 THEN RIGHT(rest, LENGTH(rest) - POSITION(',' IN rest))
+ELSE NULL
+END
+FROM
+split_ethnicity
+WHERE
+rest IS NOT NULL
+) ,
+final_split AS (
+SELECT id, vendor_id, dedicated_user_id, storage_type, timezone, warehouse_id, ethnicity
+FROM split_ethnicity
+UNION ALL
+SELECT
+id,
+vendor_id,
+dedicated_user_id,
+storage_type,
+timezone,
+warehouse_id,
+ethnicity_str AS ethnicity
+FROM
+   sc_pr_config_dedicated_relation
+WHERE
+POSITION(',' IN ethnicity_str) = 0
+),
+deduped_split AS (
+SELECT *,
+ROW_NUMBER() OVER (PARTITION BY vendor_id, warehouse_id, storage_type, ethnicity ORDER BY id) as rn
+FROM final_split
+),
+ranked_availability AS (
+SELECT
+visit_day,
+visit_week,
+product_id,
+product_title_en,
+product_ethnicity,
+division,
+parent_category,
+category,
+sub_category,
+inventory_id,
+inventory_title,
+supply_chain_analyst_id,
+purchase_specialist,
+primary_vendor,
+primary_vendor_title,
+available,
+tier,
+storage_type,
+cast(dc_sku_flag as integer) as dc_sku_flag,
+direct_import_flag,
+core_flag,
+product_sale_status,
+product_sale_status_title,
+ROW_NUMBER() OVER (PARTITION BY product_id, inventory_id ORDER BY visit_day DESC) AS rn
+FROM
+metrics.product_availability
+where visit_day =        '2026-01-15'-1--- Anchoring to yesterday, change this horizon to give all historical available days
+---       '2026-01-15'-1'
+),
+latest_calendar AS (
+SELECT
+* from Delivery_Calendar_Fc_sh )
+,
+main_query AS (
+SELECT
+'2026-01-15' AS record_date,
+w.*,
+ra.visit_day,
+ra.visit_week,
+ra.product_title_en,
+ra.product_ethnicity,
+ra.division,
+ra.parent_category,
+ra.category,
+ra.sub_category,
+ra.inventory_title AS availability_inventory_title,
+ra.supply_chain_analyst_id AS availability_supply_chain_analyst_id,
+ra.purchase_specialist AS availability_purchase_specialist,
+ra.primary_vendor AS availability_primary_vendor,
+ra.primary_vendor_title AS availability_primary_vendor_title,
+ra.available AS availability_available,
+ra.tier AS availability_tier,
+ra.storage_type AS availability_storage_type,
+cast(ra.dc_sku_flag as integer) as availability_dc_sku_flag,
+ra.direct_import_flag AS availability_direct_import_flag,
+ra.core_flag AS availability_core_flag,
+ra.product_sale_status AS availability_product_sale_status,
+ra.product_sale_status_title AS availability_product_sale_status_title,
+ds.dedicated_user_id,
+ds.timezone,
+ds.ethnicity AS split_ethnicity,
+lc.vendor_id,
+lc.storage_type,
+lc.order_week,
+lc.lead_time,
+lc.order_date,
+lc.delivery_date,
+lc.rn_order,
+lc.rn_delivery,
+ir.supply_mode,
+ir.connection_inventory_id,
+ir.connection_inventory_type,
+CASE
+WHEN ra.product_sale_status_title = 'DNR' THEN 'DNR'
+--WHEN (w.purchase_method = 'L' AND w.is_purchase = 'N' and w.inventory_id != 16) OR
+--(w.purchase_method = 'D' AND w.is_purchase = 'Y') THEN 'purchase flag conflict'
+WHEN ds.dedicated_user_id IS NULL THEN 'Dedicated relationship missing'
+WHEN lc.order_week IS NULL THEN 'Delivery calendar is missing'
+WHEN ir.supply_mode IS NULL THEN 'Inventory relationship missing'
+ELSE 'unknown'
+END AS OOS_reason
+FROM
+(SELECT
+*,
+CASE
+WHEN inventory_id = 33 THEN 16
+WHEN inventory_id = 37 THEN 7
+ELSE inventory_id
+END AS adjusted_inventory_id
+FROM mdse_product_warehouse) w
+LEFT JOIN
+(
+SELECT
+visit_day,
+visit_week,
+product_id,
+product_title_en,
+product_ethnicity,
+division,
+parent_category,
+category,
+sub_category,
+inventory_id,
+inventory_title,
+supply_chain_analyst_id,
+purchase_specialist,
+primary_vendor,
+primary_vendor_title,
+available,
+tier,
+storage_type,
+cast(dc_sku_flag as integer) as dc_sku_flag,
+direct_import_flag,
+core_flag,
+product_sale_status,
+product_sale_status_title
+FROM
+ranked_availability
+WHERE
+rn = 1
+) ra
+ON
+w.adjusted_inventory_id = ra.inventory_id
+AND w.product_id = ra.product_id
+LEFT JOIN
+(SELECT
+*,
+CASE
+WHEN warehouse_id = 33 THEN 16
+WHEN warehouse_id = 37 THEN 7
+ELSE warehouse_id
+END AS adjusted_warehouse_id
+FROM deduped_split) ds
+ON
+w.primary_vendor_id = ds.vendor_id
+AND w.adjusted_inventory_id = ds.adjusted_warehouse_id
+AND ra.storage_type = ds.storage_type
+AND ra.product_ethnicity = ds.ethnicity
+LEFT JOIN
+(SELECT
+*,
+CASE
+WHEN inventory_id = 33 THEN 16
+WHEN inventory_id = 37 THEN 7
+ELSE inventory_id
+END AS adjusted_inventory_id
+FROM latest_calendar) lc
+ON
+w.primary_vendor_id = lc.vendor_id
+AND w.adjusted_inventory_id = lc.adjusted_inventory_id
+AND ra.storage_type = lc.storage_type
+AND w.product_id = lc.product_id
+LEFT JOIN
+(SELECT
+*,
+CASE
+WHEN inventory_id = 33 THEN 16
+WHEN inventory_id = 37 THEN 7
+ELSE inventory_id
+END AS adjusted_inventory_id
+FROM split_inventory_relationship) ir
+ON
+w.primary_vendor_id = ir.vendor_id
+AND w.adjusted_inventory_id = ir.adjusted_inventory_id
+AND ra.storage_type = ir.storage_type
+WHERE
+ra.available = 0
+AND ds.rn = 1
+--AND ra.division != 'Produce'
+--AND w.purchase_method = 'L'
+--AND purchase_status = 'A'
+--and product_sale_status = 'A'
+--and w.inventory_id = 20
+--and core_flag = 1
+--and dc_sku_flag ='0'
+--and direct_import_flag ='0'
+--availability_tier = '0'
+--w.assortment_role LIKE 'NonCore%'
+AND lc.rn_order = 1)
+select record_date,mq.product_id,is_purchase,mq.adjusted_inventory_id as inventory_id,inventory_title,primary_vendor_id,primary_vendor_title,secondary_vendor_id,supply_chain_analyst_id,supply_chain_analyst_name,is_forward_buy,outl,purchase_status,purchase_status_desc,live_code,dnr_code,next_delivery_date,assortment_role,purchase_method,testing_period,mq.visit_day,visit_week,product_title_en,product_ethnicity,division,parent_category,category,sub_category,availability_inventory_title,availability_supply_chain_analyst_id,availability_purchase_specialist,availability_primary_vendor,availability_primary_vendor_title,availability_available,availability_tier,availability_storage_type,availability_dc_sku_flag,availability_direct_import_flag,availability_core_flag,availability_product_sale_status,availability_product_sale_status_title,dedicated_user_id,timezone,split_ethnicity,vendor_id,storage_type,order_week,lead_time,order_date,delivery_date,rn_order,rn_delivery,supply_mode,connection_inventory_id,connection_inventory_type,
+lai.last_available_date, oos_reason
+from main_query mq left join last_available_input lai
+on mq.inventory_id = lai.inventory_id and mq.product_id = lai.product_id);
+drop table if exists input_metrics;
+create temporary table input_metrics as (
+select ima.record_date,pa.product_id,ima.is_purchase,pa.inventory_id,ima.inventory_title,ima.primary_vendor_id,
+ima.primary_vendor_title,ima.secondary_vendor_id,ima.supply_chain_analyst_id,ima.supply_chain_analyst_name,
+ima.is_forward_buy,ima.outl,ima.purchase_status,ima.purchase_status_desc,ima.live_code,ima.dnr_code,
+ima.next_delivery_date,ima.assortment_role,ima.purchase_method,ima.testing_period,pa.visit_day,ima.visit_week,
+ima.product_title_en,ima.product_ethnicity,ima.division,ima.parent_category,ima.category,ima.sub_category,
+ima.availability_inventory_title,ima.availability_supply_chain_analyst_id,
+ima.availability_purchase_specialist,ima.availability_primary_vendor,ima.availability_primary_vendor_title,
+ima.availability_available,ima.availability_tier,ima.availability_storage_type,ima.availability_dc_sku_flag,
+ima.availability_direct_import_flag,ima.availability_core_flag,ima.availability_product_sale_status,
+ima.availability_product_sale_status_title,ima.dedicated_user_id,ima.timezone,ima.split_ethnicity,ima.vendor_id,
+ima.storage_type,ima.order_week,
+ima.lead_time,ima.order_date,ima.delivery_date,ima.rn_order,ima.rn_delivery,
+ima.supply_mode,ima.connection_inventory_id,ima.connection_inventory_type,lai.last_available_date,
+case when bb.product_id is not null and bb.bulkbuy_flag = 'Y' then
+'Bulk Buy SKU, Outside Scope'
+when oos_reason is null then 'unknown'
+else oos_reason end as oos_reason
+from availability_zero pa left join input_metricsa ima on
+pa.product_id = ima.product_id and
+pa.inventory_id = ima.inventory_id and
+pa.visit_day = ima.visit_day
+left join Red_Shift_Delivery_Calendar_Fc_sh rdc on pa.product_id = rdc.product_id and pa.inventory_id = rdc.inventory_id
+left join sandbox.sc_bulkbuy_sku bb on bb.product_id = ima.product_id and bb.fc_inventory_id = ima.inventory_id
+left join last_available_input lai on pa.product_id = lai.product_id and pa.inventory_id = lai.inventory_id
+);
+--second_po CTE
+--with second_po as (
+--select po.purchase_order_id as second_recent_po_id,po.product_id as second_recent_po_product_id,
+--po.inventory_id,max(po.est_delivery_date) as second_recent_delivery_date
+--from dws.sc_purchase_order_product po
+--inner join input_metrics on
+--po.product_id = input_metrics.product_id and po.inventory_id =input_metrics.inventory_id
+--where po.est_delivery_date < input_metrics.order_date - 1
+--group by 1,2,3
+--)
+--select * from second_po
+
+
+DROP TABLE IF EXISTS available_date_adjusted_df_a;
+CREATE TEMPORARY TABLE available_date_adjusted_df_a AS (
+WITH ranked_data AS (
+SELECT
+df.product_id,
+ism.warehouse_number AS inventory_id,
+df.snapshot_date,
+sku.order_date,
+lai.last_available_date,
+df.day AS date_demand_forecasted_for,
+df.qty_final,
+ROW_NUMBER() OVER (PARTITION BY df.product_id, ism.warehouse_number ORDER BY df.snapshot_date DESC) AS rn
+FROM dwd.df_demand_forecast_daily_snapshot63 df
+INNER JOIN   wms_inv_sales_mapping ism
+ON df.sales_org_id = ism.sales_org_id
+INNER JOIN last_available_input lai
+ON lai.product_id = df.product_id
+AND lai.inventory_id = ism.warehouse_number
+AND lai.last_available_date = df.day
+LEFT JOIN input_metrics sku
+ON lai.product_id = sku.product_id
+AND lai.inventory_id = sku.inventory_id
+WHERE
+lai.last_available_date > sku.order_date
+AND df.snapshot_date < sku.order_date
+)
+SELECT
+product_id,
+inventory_id,
+max(snapshot_date) AS snapshot_date, -- Get the most recent snapshot_date
+max(order_date) AS order_date,
+max(last_available_date) AS last_available_date,
+max(date_demand_forecasted_for) AS date_demand_forecasted_for,
+max(CASE WHEN rn = 1 THEN qty_final ELSE NULL END) AS qty_forecasted -- Select qty_final for the most recent snapshot
+FROM ranked_data
+WHERE rn = 1 -- Only pick the most recent row for each product and inventory
+GROUP BY product_id, inventory_id
+);
+
+DROP TABLE IF EXISTS available_date_adjusted_df_b;
+CREATE TEMPORARY TABLE available_date_adjusted_df_b AS (
+WITH ranked_data AS (
+SELECT
+df.product_id,
+ism.warehouse_number AS inventory_id,
+df.snapshot_date,
+sku.order_date,
+lai.last_available_date,
+df.day AS date_demand_forecasted_for,
+df.qty_final,
+ROW_NUMBER() OVER (PARTITION BY df.product_id, ism.warehouse_number ORDER BY df.snapshot_date DESC) AS rn
+FROM dwd.df_demand_forecast_daily_snapshot63 df
+INNER JOIN   wms_inv_sales_mapping ism
+ON df.sales_org_id = ism.sales_org_id
+INNER JOIN last_available_input lai
+ON lai.product_id = df.product_id
+AND lai.inventory_id = ism.warehouse_number
+AND lai.last_available_date = df.day
+LEFT JOIN input_metrics sku
+ON lai.product_id = sku.product_id
+AND lai.inventory_id = sku.inventory_id
+WHERE
+lai.last_available_date < sku.order_date
+AND df.snapshot_date < lai.last_available_date - 28
+)
+SELECT
+product_id,
+inventory_id,
+max(snapshot_date) AS snapshot_date, -- Get the most recent snapshot_date
+max(order_date) AS order_date,
+max(last_available_date) AS last_available_date,
+max(date_demand_forecasted_for) AS date_demand_forecasted_for,
+max(CASE WHEN rn = 1 THEN qty_final ELSE NULL END) AS qty_forecasted -- Select qty_final for the most recent snapshot
+FROM ranked_data
+WHERE rn = 1 -- Only pick the most recent row for each product and inventory
+GROUP BY product_id, inventory_id
+);
+
+DROP TABLE IF EXISTS available_date_adjusted_df;
+CREATE TEMPORARY TABLE available_date_adjusted_df as (
+select az.product_id,az.inventory_id,a.snapshot_date,a.order_date, a.last_available_date, a.date_demand_forecasted_for,
+coalesce(a.qty_forecasted,b.qty_forecasted) as qty_forecasted
+from availability_zero az left join
+available_date_adjusted_df_a a on az.product_id = a.product_id and az.inventory_id = a.inventory_id
+left join available_date_adjusted_df_b b on
+a.product_id = b.product_id and b.product_id = b.inventory_id
+);
+
+/*
+
+DROP TABLE IF EXISTS available_date_adjusted_df;
+CREATE TEMPORARY TABLE available_date_adjusted_df AS (
+select df.product_id,ism.warehouse_number as inventory_id,
+min(im.order_date) as order_date,
+min(im.last_available_date) as last_available_date,
+min(df.snapshot_date) as snapshot_date,
+min(df.day) as date_demand_forecasted_for,
+max(df.qty_final) as qty_forecasted
+from dwd.df_demand_forecast_daily_snapshot63 df inner join
+  wms_inv_sales_mapping ism on df.sales_org_id = ism.sales_org_id
+inner join input_metrics im on
+im.product_id = df.product_id and im.inventory_id = ism.warehouse_number and im.last_available_date = df.day
+WHERE
+--getting forecast at time of order_date for last_available_date at a daily level when order_date is before last_available_date
+(
+im.order_date < im.last_available_date
+AND df.snapshot_date - order_date <= 7 and df.snapshot_date - order_date > 0
+)
+OR
+--getting four week forecast for last_available_date when last_available_date is before most recent order_date
+(
+last_available_date < im.order_date
+AND (last_available_date - df.snapshot_date > 28 and last_available_date - df.snapshot_date < 35))
+group by 1,2
+);
+
+*/
+
+DROP TABLE IF EXISTS order_date_entire_po;
+CREATE TEMPORARY TABLE order_date_entire_po AS (
+SELECT
+ranked_data.inventory_id,
+ranked_data.product_id,
+ranked_data.purchase_order_id,
+ranked_data.po_issue_date
+FROM (
+SELECT
+im.inventory_id,
+im.product_id,
+po.po_issue_date,
+po.purchase_order_id,
+ROW_NUMBER() OVER (
+PARTITION BY im.inventory_id, im.product_id
+ORDER BY po.po_issue_date DESC
+) AS row_num
+FROM
+input_metrics im
+INNER JOIN
+dws.sc_purchase_order po
+ON
+po.inventory_id = im.inventory_id
+AND po.po_issue_date = im.order_date
+) AS ranked_data
+WHERE ranked_data.row_num = 1
+);
+
+DROP TABLE IF EXISTS check_buyer_incoming_po;
+CREATE TEMPORARY TABLE check_buyer_incoming_po AS (
+SELECT inventory_id,
+product_id,
+min(purchase_order_id) as purchase_order_id,
+min(est_delivery_date) as est_delivery_date,
+min(item_receipt_date) as item_receipt_date,
+min(receipt_date) as receipt_date
+FROM dws.sc_purchase_order_product
+WHERE (inventory_id, product_id, est_delivery_date) IN (
+SELECT inventory_id,
+product_id,
+MAX(est_delivery_date) AS max_est_delivery_date
+FROM dws.sc_purchase_order_product
+WHERE item_receipt_date IS NULL
+AND est_delivery_date >=        '2026-01-15'-1 - INTERVAL '8 days'
+GROUP BY inventory_id, product_id
+)
+AND item_receipt_date IS NULL
+AND est_delivery_date >=        '2026-01-15'-1 - INTERVAL '8 days'
+group by inventory_id,product_id
+);
+
+DROP TABLE IF EXISTS second_recent_po;
+CREATE TEMPORARY TABLE second_recent_po AS
+WITH RankedPO AS (
+SELECT
+pop.purchase_order_id,
+pop.product_id,
+pop.inventory_id,
+pop.purchase_order_id AS purchase_order_id_second,
+pop.product_id AS product_id_second,
+pop.inventory_id AS inventory_id_second,
+pop.po_issue_date as second_po_creation_date,
+pop.item_receipt_date AS item_receipt_date_second,
+pop.est_delivery_date AS est_delivery_date_second,
+pop.receipt_date as po_receipt_date_second,
+pop.est_delivery_date as second_est_delivery_date,
+ROW_NUMBER() OVER (
+PARTITION BY pop.product_id, pop.inventory_id
+ORDER BY pop.est_delivery_date DESC
+) AS rn_second
+FROM
+dws.sc_purchase_order_product pop
+inner JOIN
+Red_Shift_Delivery_Calendar_Fc_sh rdc ON pop.product_id = rdc.product_id AND pop.inventory_id = rdc.inventory_id
+WHERE
+pop.po_issue_date < rdc.order_date-2 and pop.po_issue_date > rdc.order_date-42
+)
+SELECT
+purchase_order_id,
+product_id,
+inventory_id,
+purchase_order_id_second,
+product_id_second,
+inventory_id_second,
+second_po_creation_date,
+item_receipt_date_second,
+second_est_delivery_date,
+po_receipt_date_second,
+est_delivery_date_second
+FROM
+RankedPO
+WHERE
+rn_second = 1;
+-- Filtering for the most recent records
+--select * from second_recent_po;
+------Final Table
+-----Create reason codes logic
+---Create the flow of tables, joins
+---Prirtize which reason codes go first
+---Check the unckown reason codes left in the end
+---Add columns to the final table as per required
+--select distinct OOS_REASON ,count(distinct product_id) from sandbox.final_oos_reason group by 1
+DROP TABLE IF EXISTS most_recent_po;
+create temporary TABLE most_recent_po AS (
+SELECT pop.purchase_order_id,pop.product_id,pop.inventory_id,pop.po_issue_date as po_creation_date, pop.est_delivery_date as po_est_delivery_date,pop.receipt_date as po_receiving_date, pop.item_receipt_date,
+sum(pop.original_quantity*pop.quantity_per_unit) as po_requested_qty, sum(pop.receipt_quantity) as po_received_qty
+FROM dws.sc_purchase_order_product pop
+INNER JOIN Red_Shift_Delivery_Calendar_Fc_sh rdc
+ON pop.product_id = rdc.product_id AND pop.inventory_id = rdc.inventory_id AND pop.po_issue_date = rdc.order_date
+--WHERE visit_day =        '2026-01-15'-1
+group by 1,2,3,4,5,6,7
+);
+DROP TABLE IF EXISTS most_recent_manual_po;
+CREATE TEMPORARY TABLE most_recent_manual_po AS (
+WITH filtered_data AS (
+SELECT
+pop.purchase_order_id,
+pop.product_id,
+pop.inventory_id,
+pop.po_issue_date,
+pop.est_delivery_date,
+pop.receipt_date,
+pop.item_receipt_date,
+la.last_available_date,
+rdc.lead_time
+FROM
+dws.sc_purchase_order_product pop
+INNER JOIN
+Red_Shift_Delivery_Calendar_Fc_sh rdc
+ON pop.product_id = rdc.product_id
+AND pop.inventory_id = rdc.inventory_id
+AND pop.po_issue_date != rdc.order_date
+INNER JOIN
+last_available_input la
+ON rdc.product_id = la.product_id
+AND rdc.inventory_id = la.inventory_id
+WHERE
+pop.po_issue_date > rdc.order_date and
+pop.po_issue_date + rdc.lead_time < la.last_available_date
+)
+SELECT
+MIN(purchase_order_id) as purchase_order_id,
+MIN(product_id) AS product_id,
+MIN(inventory_id) AS inventory_id,
+MIN(po_issue_date) AS manual_po_creation_date,
+MIN(est_delivery_date) AS manual_po_est_delivery_date,
+MIN(receipt_date) AS manual_po_receiving_date,
+MIN(item_receipt_date) AS manual_item_receipt_date,
+MIN(last_available_date) AS manual_last_available_date,
+MIN(lead_time) AS lead_time
+FROM
+filtered_data
+GROUP BY
+product_id, inventory_id
+);
+
+DROP TABLE IF EXISTS backup_demand;
+CREATE TEMPORARY TABLE backup_demand AS (
+SELECT
+CAST(df.week_start_date AS date) AS week_start,
+ism.warehouse_number AS inventory_id,
+m.sales_region_id,
+df.product_id,
+df.rec_create_time,
+df.rec_update_time,
+la.last_available_date,
+       '2026-01-15'-1 AS visit_day,
+case when sum(df.promolift_qty) > 0 then 'promotion sku' else 'not promotion sku' end as promotion_sku_status,
+sum(df.promolift_qty) as promo_lift_qty,
+SUM(df.qty + COALESCE(df.promolift_qty, 0))/7 AS df_qty
+FROM dwd.sc_demand_forecast df
+LEFT JOIN dwd.mdse_product p ON p.product_id = df.product_id
+LEFT JOIN metrics.sales_org_price_region_mapping m ON m.sales_org_id = df.sales_org_id
+LEFT JOIN   wms_inv_sales_mapping ism ON ism.sales_org_id = df.sales_org_id
+--left join last_available_input la on df.product_id = la.product_id and la.inventory_id = ism.warehouse_number
+inner join last_available_input la on df.product_id = la.product_id and la.inventory_id = ism.warehouse_number
+WHERE
+(df.qty + COALESCE(df.promolift_qty, 0)) > 0
+AND df.week_start_date >= last_available_date- INTERVAL '7 days'
+AND df.week_start_date <= last_available_date
+GROUP BY
+CAST(df.week_start_date AS date), m.sales_region_id, df.product_id, ism.warehouse_number, la.last_available_date,df.rec_create_time,df.rec_update_time
+);
+
+DROP TABLE IF EXISTS backup_sales;
+CREATE TEMPORARY TABLE backup_sales AS(
+SELECT
+op.inventory_id,
+op.product_id,
+sum(op.quantity) AS sold_qty
+FROM input_metrics im
+left join metrics.order_product op on im.product_id = op.product_id and im.inventory_id = op.inventory_id
+LEFT JOIN last_available_input la
+ON la.product_id = im.product_id
+AND la.inventory_id = im.inventory_id
+WHERE op.order_biz_type IN ('grocery', 'alcohol')
+AND op.payment_mode = 'F'
+and op.order_day = la.last_available_date
+--AND op.order_day BETWEEN (la.last_available_date - INTERVAL '7 days') AND la.last_available_date
+GROUP BY op.inventory_id, op.product_id);
+
+DROP TABLE IF EXISTS fcst_sales;
+CREATE TEMPORARY TABLE fcst_sales AS (
+SELECT
+im.inventory_id,
+im.product_id,
+irs.order_quantity,
+irs.sellable_quantity,
+irs.target_quantity,
+max(bd.promo_lift_qty) as promo_lift_qty,
+MIN(bd.rec_create_time) AS earliest_inputted_demand_date,
+CASE
+when min(bs.sold_qty) is not null then min(bs.sold_qty)
+--WHEN MIN(irs.avg_daily_sales) IS NULL THEN MIN(bs.sold_qty)
+ELSE MIN(irs.avg_daily_sales)
+END AS avg_daily_sales,
+CASE
+--when min(fwdf.qty_demand_forecasted) is not null then min(fwdf.qty_demand_forecasted)
+when min(laf.qty_forecasted) is not null then min(laf.qty_forecasted)
+WHEN MIN(irs.avg_daily_demand_forecast) IS NULL THEN MIN(bd.df_qty)
+ELSE MIN(irs.avg_daily_demand_forecast)
+END AS avg_daily_demand_forecast
+FROM input_metrics im
+left join available_date_adjusted_df laf on laf.product_id = im.product_id and laf.inventory_id = im.inventory_id
+LEFT JOIN last_available_input la ON
+im.product_id = la.product_id AND im.inventory_id = la.inventory_id
+--left join four_week_df fwdf on im.product_id = fwdf.product_id and im.inventory_id = fwdf.inventory_id
+LEFT JOIN   irs_network_product_calculation irs ON
+im.product_id = irs.product_id AND im.inventory_id = irs.facility_id AND irs.snapshot_date = la.last_available_date
+LEFT JOIN backup_demand bd ON
+im.product_id = bd.product_id AND im.inventory_id = bd.inventory_id
+LEFT JOIN backup_sales bs ON
+im.product_id = bs.product_id AND im.inventory_id = bs.inventory_id
+GROUP BY im.product_id, im.inventory_id,irs.order_quantity,irs.sellable_quantity,irs.target_quantity
+);
+
+DROP TABLE IF EXISTS promo_check;
+CREATE TEMPORARY TABLE promo_check AS (
+SELECT
+lai.product_id,
+lai.inventory_id,
+min(lai.last_available_date)::date as last_available_date,
+min(ppe.product_start_time)::date as product_start_time,
+min(ppe.product_end_time)::date as product_end_time,
+min(ppe.is_lightning_deal) as is_lightning_deal,
+min(ppe.rec_create_time)::date as rec_create_time,
+min(ppe.rec_update_time)::date as rec_update_time
+FROM
+dwd.pps_promotion_event_product ppe
+LEFT JOIN
+  wms_inv_sales_mapping ism
+ON ism.sales_org_id = ppe.sales_org_id
+INNER JOIN
+last_available_input lai
+ON ppe.product_id = lai.product_id
+AND ism.warehouse_number = lai.inventory_id
+left join input_metrics im on ppe.product_Id = im.product_id and ism.warehouse_number = im.inventory_id
+WHERE
+ppe.product_start_time <= lai.last_available_date and
+ppe.product_start_time >= im.order_date
+group by lai.product_id,lai.inventory_id
+);
+drop table if exists irs_info_zero_order_qty;
+create temporary table irs_info_zero_order_qty as (
+select ima.product_id,ima.inventory_id,ima.order_date,irs.target_quantity,irs.sellable_quantity,irs.order_quantity from
+input_metricsa ima left join   irs_network_product_calculation irs on
+ima.product_id = irs.product_id and ima.inventory_id = irs.facility_id and ima.order_date = irs.snapshot_date
+);
+
+DROP TABLE IF EXISTS most_recent_pr;
+CREATE TEMPORARY TABLE most_recent_pr AS
+WITH ranked_pr AS (
+SELECT
+id,
+inventory_id,
+connection_inventory_id AS storage_id,
+connection_inventory_type,
+vendor_id,
+product_id,
+qty,
+quantity_per_unit,
+calendar_type,
+order_date,
+eta_connection_date,
+eta_final_date,
+status,
+source,
+po_id,
+rec_creator_id,
+rec_create_time,
+rec_update_time,
+auto_proposal,
+ROW_NUMBER() OVER (
+PARTITION BY product_id, inventory_id, storage_id, vendor_id, order_date
+ORDER BY rec_update_time DESC
+) AS row_num
+FROM    pr_purchase_request
+WHERE status = 'P' -- Filter rows where status equals 'P'
+)
+SELECT
+id,
+inventory_id,
+storage_id,
+connection_inventory_type,
+vendor_id,
+product_id,
+qty,
+quantity_per_unit,
+calendar_type,
+order_date,
+eta_connection_date,
+eta_final_date,
+status,
+source,
+po_id,
+rec_creator_id,
+rec_create_time,
+rec_update_time,
+auto_proposal
+FROM ranked_pr
+WHERE row_num = 1;
+
+drop table if exists table_combined;
+create temporary table table_combined as (
+select im.product_id,im.inventory_id,
+case when im.inventory_id = 16 and im.purchase_method = 'D' and tg.product_id is not null then 'NJ, Clifton Tag Pair, DC Purchase Method'
+when im.inventory_id = 16 and im.purchase_method = 'D' and tg.product_id is null then 'NJ, Clifton not tag pair, DC Purhcase Method'
+else null end as tag_pair,
+dc_lane.calculation_tags,dc_lane.source_id,
+pr.qty as pr_qty,dml.date_made_live,
+irs.avg_daily_sales,irs.avg_daily_demand_forecast,
+pro.rec_create_time as date_promotion_demand_inputted,pro.product_start_time as promotion_start_date, pro.product_end_time as promotion_end_date,
+case when pro.product_id is not null then 'promotion_sku' else 'non_promotion_sku' end as promotion_sku_status,irs.promo_lift_qty,
+inv.order_quantity as suggested_order_date_order_quantity,inv.target_quantity as order_date_target_quantity,inv.sellable_quantity as order_date_sellable_quantity,
+inv.available_quantity as suggested_order_date_available_quantity,
+irspr.irs_pr_submitted_quantity as irs_pr_submitted_quantity, irspr.irs_pr_submission_status as irs_pr_submission_status,irspr.irs_pr_id as irs_pr_id,
+la.order_quantity as last_available_order_quantity,la.target_quantity as last_available_target_quantity,la.sellable_quantity as last_available_sellable_quantity,
+mr.purchase_order_id as most_recent_purchase_order_id,mr.po_creation_date as most_recent_po_date,mr.po_requested_qty as most_recent_po_requested_qty,
+mr.po_received_qty as most_recent_po_received_qty,mr.po_est_delivery_date as most_recent_po_delivery_date, mr.po_receiving_date as most_recent_entire_po_receiving_date,mr.item_receipt_date as most_recent_po_sku_receipt_date,
+rmp.purchase_order_id as most_recent_manual_purchase_order_id,manual_po_creation_date,manual_po_est_delivery_date,manual_po_receiving_date,manual_item_receipt_date,manual_last_available_date,
+sr.purchase_order_id_second as second_most_recent_purchase_order_id,sr.second_po_creation_date,sr.second_est_delivery_date,sr.po_receipt_date_second,sr.item_receipt_date_second,
+im.record_date,im.is_purchase,im.primary_vendor_id,im.primary_vendor_title,im.secondary_vendor_id,im.supply_chain_analyst_id,im.supply_chain_analyst_name,
+im.is_forward_buy,im.outl,im.purchase_status,im.purchase_status_desc,im.live_code,im.dnr_code,im.next_delivery_date,im.assortment_role,
+im.purchase_method,im.testing_period,im.visit_day,im.visit_week,im.product_title_en,im.product_ethnicity,im.division,im.parent_category,im.category,im.sub_category,
+im.availability_inventory_title,im.availability_supply_chain_analyst_id,im.availability_purchase_specialist,im.availability_primary_vendor,im.availability_primary_vendor_title,
+im.availability_available,im.availability_tier,im.availability_storage_type,im.availability_dc_sku_flag,im.availability_direct_import_flag,im.availability_core_flag,im.availability_product_sale_status,im.availability_product_sale_status_title,im.dedicated_user_id,im.timezone,im.split_ethnicity,im.vendor_id,im.storage_type,im.order_week,im.lead_time,
+im.order_date,im.delivery_date,im.rn_order,im.rn_delivery,im.supply_mode,im.connection_inventory_id,im.connection_inventory_type,im.last_available_date,
+CASE
+WHEN im.oos_reason = 'unknown' THEN
+CASE
+--when im.inventory_id = 16 and im.purchase_method = 'L' and im.is_purchase = 'N' then
+--'Out of scope - Clifton SKU where purchasing method is L and flag is off'
+when dc_lane.calculation_tags like '%VENDOR%' and dc_lane.initial_quantity > 0 and dc_lane.quantity = 0
+then 'MOQ Issue - No order submitted due to MOQ'
+WHEN most_recent_po_sku_receipt_date IS NULL AND most_recent_entire_po_receiving_date IS NOT NULL
+THEN 'Vendor OOS - last PO SKU not received - but other SKU received'
+when most_recent_po_sku_receipt_date IS NULL AND most_recent_entire_po_receiving_date IS NULL and mr.po_creation_date is not null
+then 'Vendor OOS - Entire PO Not Received'
+when od.purchase_order_id is not null and mr.purchase_order_id is null and irspr.irs_pr_submission_status = 'SUCCESS' then
+'Vendor OOS - Vendor deleted SKU from PO'
+when most_recent_po_requested_qty < pr.qty
+then 'Possible vendor shortage issue - Last PO qty less than pr qty, '
+when rmp.manual_item_receipt_date is null and rmp.product_id is not null
+then 'Manual PO SKU with enough lead time not received'
+when mr.po_receiving_date > mr.po_est_delivery_date
+then 'PO arrived late'
+when sr.item_receipt_date_second is null and sr.purchase_order_id_second is not null
+then 'Vendor OOS - 2nd recent PO SKU not received, not enough time to catch up'
+when inv.order_quantity > 0 and mr.product_id is null then
+'Vendor OOS - No PO created on order date with Order Quantity'
+when im.order_date < earliest_inputted_demand_date then
+'No forecasted demand during last order date'
+--when (dml.date_made_live > im.order_date) then
+--'SKU Made Live too recently to go through PR/PO cycle'
+when irs_pr_submission_status = 'FAILED'
+then 'Error in missed PR-PO conversion in last order cycle'
+--WHEN irs.avg_daily_sales = 0 THEN 'unknown'
+when pro.product_id is not null and pro.rec_create_time > im.order_date
+then 'Promotion SKU Demand inputted after order date'
+when ((irs.avg_daily_sales-irs.avg_daily_demand_forecast)/nullif(irs.avg_daily_sales,0) > 0.1)
+--or
+-- (irs.sellable_quantity >= irs.target_quantity and irs.sellable_quantity is not null ) or
+--(la.target_quantity/2 >= inv.target_quantity) or
+--zoq.order_quantity = 0 and zoq.target_quantity > 0
+then 'Demand Underforecasted'
+--when inv.product_id is null then 'Not in IRS, Likely Config Error'
+when inv.product_id is null then 'Config Error - Not in IRS Previously'
+ELSE im.oos_reason -- If the inner condition is not met, use the original oos_reason
+END
+ELSE im.oos_reason -- If oos_reason is not 'unknown', return the original oos_reason
+END AS oos_reason
+from input_metrics im
+left join
+most_recent_po mr on im.product_id = mr.product_id and im.inventory_id = mr.inventory_id and mr.po_creation_date = im.order_date
+left join second_recent_po sr on sr.product_id = im.product_id and sr.inventory_id = im.inventory_id
+left join order_date_entire_po od on im.product_id = od.product_id and im.inventory_id = od.inventory_id
+left join irspr_inventory_adjusted irspr on im.product_id = irspr.product_id and im.inventory_id = irspr.facility_id_adjusted and im.order_date = irspr.order_date
+left join inv_inventory_adjusted inv on im.product_Id = inv.product_id and im.inventory_id = inv.facility_id_adjusted and im.order_date = inv.snapshot_date
+--left join    pr_purchase_request pr on im.product_id = pr.product_id and im.inventory_id = pr.inventory_id and im.order_date = pr.order_date and pr.vendor_id = im.vendor_id
+left join most_recent_pr pr on im.product_id = pr.product_id and im.inventory_id = pr.inventory_id and im.order_date = pr.order_date and pr.vendor_id = im.vendor_id
+left join fcst_sales irs on
+im.product_id = irs.product_id and im.inventory_id = irs.inventory_id
+left join most_recent_manual_po rmp on im.product_id = rmp.product_id and im.inventory_id = rmp.inventory_id
+left join date_made_live dml on im.product_id = dml.product_id and im.inventory_id = dml.inventory_id
+left join last_available_input la on im.product_id = la.product_id and im.inventory_id = la.inventory_id
+left join irs_info_zero_order_qty zoq on im.product_id = zoq.product_id and im.inventory_id = zoq.inventory_id
+left join inv_inventory_adjusteda inva on im.product_Id = inva.product_id and im.inventory_id = inva.facility_id_adjusted
+left join promo_check pro on pro.product_id = im.product_id and pro.inventory_id = im.inventory_id
+left join sandbox.facility_tag_pair_sku tg on tg.product_id = im.product_id and tg.facility_tag_pair = 'East to West' and im.inventory_id = 16
+left join dwd.irs_network_product_destination_replenishment_lane dc_lane on dc_lane.product_id = im.product_id and dc_lane.destination_facility_id = im.inventory_id and
+dc_lane.snapshot_date = im.order_date
+);
+
+/*
+DROP TABLE IF exists local_oos_reason_codes;
+CREATE TEMPORARY TABLE local_oos_reason_codes AS (
+WITH filtered_pa AS (
+SELECT
+pa.visit_day,
+pa.product_id,
+pa.inventory_id,
+sum(pa.available) as available,
+MAX(pa.warehouse_inventory_id) AS warehouse_inventory_id,
+MAX(pa.product_title_en) as product_title_en, --column added
+MAX(pa.primary_vendor) as primary_vendor,
+MAX(pa.primary_vendor_title) AS primary_vendor_title,
+MAX(pa.sku_owner) AS sku_owner,
+MAX(pa.weee_buyer_id) as weee_buyer_id,
+MAX(pa.weee_buyer_name) as weee_buyer_name,
+MAX(pa.purchase_specialist) as purchase_specialist,
+MAX(season_sku_flag) as season_sku_flag,
+MAX(pa.storage_type) AS storage_type,
+MAX(pa.tier) as tier,
+MAX(pa.core_flag) as core_flag,
+MAX(pa.dc_sku_flag) AS dc_sku_flag,
+MAX(pa.direct_import_flag) as direct_import_flag,
+MAX(pa.purchase_method) as purchase_method,
+MAX(pa.division) AS division,
+MAX(pa.parent_category) AS parent_category,
+MAX(pa.category) AS category,
+MAX(pa.sub_category) AS sub_category,
+MAX(pa.product_sale_status) AS product_sale_status,
+MAX(pa.product_sale_status_title) AS product_sale_status_title,
+MAX(pa.product_ethnicity) AS product_ethnicity,
+MAX(pa.ethnicity_user) AS ethnicity_user,
+MAX(lai.last_available_date) as last_available_date,
+SUM(pa.order_cnt) as order_cnt,
+SUM(pa.order_cnt_adjusted) as order_cnt_adjusted,
+1 - COALESCE(SUM(pa.order_cnt_adjusted * pa.available) / NULLIF(SUM(pa.order_cnt_adjusted), 0), 0) AS unaval_weighted
+FROM metrics.product_availability pa
+left join last_available_input lai on pa.product_id = lai.product_id and pa.inventory_id = lai.inventory_id
+WHERE pa.visit_day =        '2026-01-15'-1
+GROUP BY pa.visit_day, pa.product_id, pa.inventory_id
+)
+
+SELECT distinct
+pa.visit_day,
+pa.product_id,
+pa.inventory_id,
+pa.storage_type,
+pa.product_title_en,
+pa.primary_vendor,
+pa.primary_vendor_title,
+pa.tier,
+pa.core_flag,
+pa.direct_import_flag,
+pa.purchase_method,
+pa.division,
+mp.department,
+mp.short_title_zh,
+mp.short_title_en,
+mp.is_imported,
+pa.season_sku_flag,
+pa.parent_category,
+pa.category,
+pa.sub_category,
+pa.product_ethnicity,
+pa.ethnicity_user,
+pa.dc_sku_flag,
+pa.sku_owner,
+pa.weee_buyer_id,
+pa.weee_buyer_name,
+pa.purchase_specialist,
+pa.order_cnt_adjusted,
+pa.unaval_weighted,
+pa.product_sale_status_title,
+pa.available,
+tc.suggested_order_date_order_quantity,tc.order_date_target_quantity,tc.order_date_sellable_quantity,
+tc.date_promotion_demand_inputted,tc.promotion_sku_status,tc.promotion_start_date,tc.promotion_end_date,tc.promo_lift_qty,
+tc.last_available_order_quantity,tc.last_available_target_quantity,tc.last_available_sellable_quantity,
+tc.pr_qty,tc.avg_daily_sales,pa.visit_day - pa.last_available_date as days_oos,
+bic.inventory_id as buyer_check_inventory_id,bic.product_id as buyer_check_product_id,
+bic.purchase_order_id as buyer_check_purchase_order_id,bic.est_delivery_date as buyer_check_est_delivery_date,
+bic.item_receipt_date as buyer_check_item_receipt_date,bic.receipt_date as buyer_check_receipt_date,
+tc.irs_pr_submitted_quantity, tc.irs_pr_submission_status,tc.irs_pr_id,
+tc.date_made_live,tc.avg_daily_demand_forecast,tc.most_recent_purchase_order_id,tc.most_recent_po_date,tc.most_recent_po_requested_qty,tc.most_recent_po_received_qty,tc.most_recent_po_delivery_date,tc.most_recent_entire_po_receiving_date,tc.most_recent_po_sku_receipt_date,tc.most_recent_manual_purchase_order_id,tc.manual_po_creation_date,tc.manual_po_est_delivery_date,tc.manual_po_receiving_date,tc.manual_item_receipt_date,tc.second_most_recent_purchase_order_id,tc.second_po_creation_date,tc.second_est_delivery_date,tc.po_receipt_date_second,tc.item_receipt_date_second,tc.record_date,tc.is_purchase,tc.secondary_vendor_id,tc.supply_chain_analyst_id,tc.supply_chain_analyst_name,tc.is_forward_buy,tc.outl,tc.purchase_status,tc.purchase_status_desc,tc.live_code,tc.dnr_code,tc.next_delivery_date,mpw.assortment_role,tc.testing_period,tc.visit_week,tc.availability_inventory_title,tc.availability_supply_chain_analyst_id,tc.availability_purchase_specialist,tc.availability_primary_vendor,tc.availability_primary_vendor_title,tc.availability_available,tc.availability_tier,tc.availability_storage_type,tc.availability_dc_sku_flag,tc.availability_direct_import_flag,tc.availability_core_flag,tc.availability_product_sale_status,tc.availability_product_sale_status_title,tc.dedicated_user_id,tc.timezone,tc.split_ethnicity,tc.vendor_id,tc.order_week,tc.lead_time,tc.order_date,tc.delivery_date,tc.rn_order,tc.rn_delivery,tc.supply_mode,tc.connection_inventory_id,tc.connection_inventory_type,pa.last_available_date,
+CASE
+WHEN pa.available > 0 THEN 'available'
+ELSE tc.oos_reason
+END AS oos_reason
+FROM filtered_pa pa
+LEFT JOIN table_combined tc
+ON pa.product_id = tc.product_id
+AND pa.inventory_id = tc.inventory_id
+AND pa.visit_day = tc.visit_day
+left join dwd.mdse_product mp
+on pa.product_id = mp.product_id
+left join check_buyer_incoming_po bic on pa.product_id = bic.product_id and pa.inventory_id = bic.inventory_id
+left join mdse_product_warehouse mpw on mpw.product_id = pa.product_id and mpw.inventory_id = pa.inventory_id
+);
+*/
+
+DROP TABLE IF EXISTS local_oos_reason_codes;
+CREATE TEMPORARY TABLE local_oos_reason_codes AS (
+WITH filtered_pa AS (
+SELECT
+pa.visit_day,
+pa.product_id,
+pa.inventory_id,
+sum(pa.available) as available,
+MAX(pa.warehouse_inventory_id) AS warehouse_inventory_id,
+MAX(pa.product_title_en) as product_title_en, --column added
+MAX(pa.primary_vendor) as primary_vendor,
+MAX(pa.primary_vendor_title) AS primary_vendor_title,
+MAX(pa.sku_owner) AS sku_owner,
+MAX(pa.weee_buyer_id) as weee_buyer_id,
+MAX(pa.weee_buyer_name) as weee_buyer_name,
+MAX(pa.purchase_specialist) as purchase_specialist,
+MAX(season_sku_flag) as season_sku_flag,
+MAX(pa.storage_type) AS storage_type,
+MAX(pa.tier) as tier,
+MAX(pa.core_flag) as core_flag,
+CAST(MAX(pa.dc_sku_flag) AS INTEGER) AS dc_sku_flag,
+MAX(pa.direct_import_flag) as direct_import_flag,
+MAX(pa.purchase_method) as purchase_method,
+MAX(pa.division) AS division,
+MAX(pa.parent_category) AS parent_category,
+MAX(pa.category) AS category,
+MAX(pa.sub_category) AS sub_category,
+MAX(pa.order_biz_type) as order_biz_type,
+MAX(pa.product_sale_status) AS product_sale_status,
+MAX(pa.product_sale_status_title) AS product_sale_status_title,
+MAX(pa.product_ethnicity) AS product_ethnicity,
+MAX(pa.ethnicity_user) AS ethnicity_user,
+MAX(lai.last_available_date) as last_available_date,
+SUM(pa.order_cnt) as order_cnt,
+SUM(pa.order_cnt_adjusted) as order_cnt_adjusted,
+1 - COALESCE(SUM(pa.order_cnt_adjusted * pa.available) / NULLIF(SUM(pa.order_cnt_adjusted), 0), 0) AS unaval_weighted
+FROM metrics.product_availability pa
+left join last_available_input lai on pa.product_id = lai.product_id and pa.inventory_id = lai.inventory_id
+WHERE pa.visit_day =        '2026-01-15'-1
+GROUP BY pa.visit_day, pa.product_id, pa.inventory_id
+)
+
+, ranked_data AS (
+SELECT distinct
+pa.visit_day,
+pa.product_id,
+pa.inventory_id,
+pa.storage_type,
+pa.product_title_en,
+pa.primary_vendor,
+pa.primary_vendor_title,
+pa.tier,
+pa.core_flag,
+pa.direct_import_flag,
+pa.purchase_method,
+pa.division,
+mp.department,
+mp.short_title_zh,
+mp.short_title_en,
+mp.is_imported,
+pa.season_sku_flag,
+pa.parent_category,
+pa.category,
+pa.sub_category,
+pa.product_ethnicity,
+pa.ethnicity_user,
+pa.dc_sku_flag,
+pa.sku_owner,
+pa.weee_buyer_id,
+pa.weee_buyer_name,
+pa.purchase_specialist,
+pa.order_biz_type,
+pa.order_cnt_adjusted,
+pa.unaval_weighted,
+pa.product_sale_status_title,
+pa.available,
+tc.suggested_order_date_order_quantity,tc.order_date_target_quantity,tc.order_date_sellable_quantity,
+tc.calculation_tags,
+tc.date_promotion_demand_inputted,tc.promotion_sku_status,tc.promotion_start_date,tc.promotion_end_date,tc.promo_lift_qty,
+tc.suggested_order_date_available_quantity,
+tc.last_available_order_quantity,tc.last_available_target_quantity,tc.last_available_sellable_quantity,
+tc.pr_qty,tc.avg_daily_sales,pa.visit_day - pa.last_available_date as days_oos,
+bic.inventory_id as buyer_check_inventory_id,bic.product_id as buyer_check_product_id,
+tc.tag_pair,
+bic.purchase_order_id as buyer_check_purchase_order_id,bic.est_delivery_date as buyer_check_est_delivery_date,
+bic.item_receipt_date as buyer_check_item_receipt_date,bic.receipt_date as buyer_check_receipt_date,
+tc.irs_pr_submitted_quantity, tc.irs_pr_submission_status,tc.irs_pr_id,
+tc.date_made_live,tc.avg_daily_demand_forecast,tc.most_recent_purchase_order_id,tc.most_recent_po_date,tc.most_recent_po_requested_qty,tc.most_recent_po_received_qty,tc.most_recent_po_delivery_date,tc.most_recent_entire_po_receiving_date,tc.most_recent_po_sku_receipt_date,tc.most_recent_manual_purchase_order_id,tc.manual_po_creation_date,tc.manual_po_est_delivery_date,tc.manual_po_receiving_date,tc.manual_item_receipt_date,tc.second_most_recent_purchase_order_id,tc.second_po_creation_date,tc.second_est_delivery_date,tc.po_receipt_date_second,tc.item_receipt_date_second,tc.record_date,tc.is_purchase,tc.secondary_vendor_id,tc.supply_chain_analyst_id,tc.supply_chain_analyst_name,tc.is_forward_buy,tc.outl,tc.purchase_status,tc.purchase_status_desc,tc.live_code,tc.dnr_code,tc.next_delivery_date,mpw.assortment_role,tc.testing_period,tc.visit_week,tc.availability_inventory_title,tc.availability_supply_chain_analyst_id,tc.availability_purchase_specialist,tc.availability_primary_vendor,tc.availability_primary_vendor_title,tc.availability_available,tc.availability_tier,tc.availability_storage_type,tc.availability_dc_sku_flag,tc.availability_direct_import_flag,tc.availability_core_flag,tc.availability_product_sale_status,tc.availability_product_sale_status_title,tc.dedicated_user_id,tc.timezone,tc.split_ethnicity,tc.vendor_id,tc.order_week,tc.lead_time,tc.order_date,tc.delivery_date,tc.rn_order,tc.rn_delivery,tc.supply_mode,tc.connection_inventory_id,tc.connection_inventory_type,pa.last_available_date,
+CASE
+WHEN pa.available > 0 THEN 'available'
+ELSE tc.oos_reason
+END AS oos_reason, -- Fixed oos_reason logic
+-- Other tc columns remain unchanged
+ROW_NUMBER() OVER (PARTITION BY pa.visit_day, pa.product_id, pa.inventory_id
+ORDER BY pa.unaval_weighted DESC) AS rn
+FROM filtered_pa pa
+LEFT JOIN table_combined tc
+ON pa.product_id = tc.product_id
+AND pa.inventory_id = tc.inventory_id
+AND pa.visit_day = tc.visit_day
+LEFT JOIN dwd.mdse_product mp
+ON pa.product_id = mp.product_id
+LEFT JOIN check_buyer_incoming_po bic
+ON pa.product_id = bic.product_id
+AND pa.inventory_id = bic.inventory_id
+LEFT JOIN mdse_product_warehouse mpw
+ON mpw.product_id = pa.product_id
+AND mpw.inventory_id = pa.inventory_id
+)
+SELECT *
+FROM ranked_data
+WHERE rn = 1
+);
+-- Step 1: Create a temporary table for updated_local_oos
+DROP TABLE IF EXISTS temp_updated_local_oos;
+CREATE TEMP TABLE temp_updated_local_oos AS
+SELECT
+loc.visit_day,loc.product_id,loc.inventory_id,loc.storage_type,loc.product_title_en,loc.primary_vendor,
+loc.tag_pair,
+loc.primary_vendor_title,loc.tier,loc.core_flag,loc.direct_import_flag,loc.purchase_method,
+loc.division,loc.department,loc.short_title_zh,loc.short_title_en,
+loc.is_imported,loc.season_sku_flag,loc.parent_category,
+loc.category,loc.sub_category,loc.product_ethnicity,loc.ethnicity_user,
+loc.dc_sku_flag,
+loc.sku_owner,loc.weee_buyer_id,loc.weee_buyer_name,
+loc.purchase_specialist,loc.order_cnt_adjusted,loc.unaval_weighted,
+loc.suggested_order_date_available_quantity,
+loc.order_date, loc.calculation_tags,
+loc.order_biz_type,
+loc.product_sale_status_title,loc.available,loc.suggested_order_date_order_quantity,loc.order_date_target_quantity,
+loc.order_date_sellable_quantity,loc.date_promotion_demand_inputted,loc.promotion_sku_status,loc.promotion_start_date,
+loc.promotion_end_date,loc.promo_lift_qty,loc.last_available_order_quantity,loc.last_available_target_quantity,
+loc.last_available_sellable_quantity,loc.pr_qty,loc.avg_daily_sales,loc.days_oos,loc.buyer_check_inventory_id,
+loc.buyer_check_product_id,loc.buyer_check_purchase_order_id,loc.buyer_check_est_delivery_date,
+loc.buyer_check_item_receipt_date,loc.buyer_check_receipt_date,loc.irs_pr_submitted_quantity,loc.irs_pr_submission_status,
+loc.irs_pr_id,loc.date_made_live,loc.avg_daily_demand_forecast,loc.most_recent_purchase_order_id,loc.most_recent_po_date,
+loc.most_recent_po_requested_qty,loc.most_recent_po_received_qty,loc.most_recent_po_delivery_date,
+loc.most_recent_entire_po_receiving_date,loc.most_recent_po_sku_receipt_date,loc.most_recent_manual_purchase_order_id,
+loc.manual_po_creation_date,loc.manual_po_est_delivery_date,loc.manual_po_receiving_date,loc.manual_item_receipt_date,
+loc.second_most_recent_purchase_order_id,loc.second_po_creation_date,loc.second_est_delivery_date,loc.po_receipt_date_second,
+loc.item_receipt_date_second,loc.record_date,loc.is_purchase,loc.secondary_vendor_id,loc.supply_chain_analyst_id,
+loc.supply_chain_analyst_name,loc.is_forward_buy,loc.outl,loc.purchase_status,loc.purchase_status_desc,
+loc.live_code,loc.dnr_code,loc.next_delivery_date,loc.assortment_role,loc.testing_period,loc.visit_week,
+loc.availability_inventory_title,loc.availability_supply_chain_analyst_id,
+loc.availability_purchase_specialist,loc.availability_primary_vendor,loc.availability_primary_vendor_title,loc.availability_available,
+loc.availability_tier,loc.availability_storage_type,loc.availability_dc_sku_flag,loc.availability_direct_import_flag,loc.availability_core_flag,
+loc.availability_product_sale_status,loc.availability_product_sale_status_title,loc.dedicated_user_id,loc.timezone,loc.split_ethnicity,loc.vendor_id,
+loc.order_week,loc.lead_time,loc.delivery_date,loc.rn_order,loc.rn_delivery,loc.supply_mode,
+loc.connection_inventory_id,loc.connection_inventory_type,loc.last_available_date,
+CASE
+WHEN (loc.purchase_method = 'D' AND dc.dc_oos_reason_code IS NOT null and dc.priority_1_dc_name is not null)
+THEN dc.dc_oos_reason_code
+ELSE loc.oos_reason
+END AS oos_reason
+FROM local_oos_reason_codes loc
+LEFT JOIN dc_fc_oos_reason_codes dc
+ON loc.product_id = dc.product_id
+AND loc.inventory_id = dc.inventory_id;
+-- Step 2: Create a temporary table for final_oos with additional replacement logic
+DROP TABLE IF EXISTS temp_final_oos;
+CREATE TEMP TABLE temp_final_oos AS
+SELECT distinct
+loc.visit_day,loc.product_id,loc.inventory_id,loc.storage_type,loc.product_title_en,loc.primary_vendor,
+loc.tag_pair, loc.calculation_tags,
+loc.primary_vendor_title,loc.tier,loc.core_flag,loc.direct_import_flag,loc.purchase_method,
+loc.division,loc.department,loc.short_title_zh,loc.short_title_en,
+loc.is_imported,loc.season_sku_flag,loc.parent_category,
+loc.category,loc.sub_category,loc.product_ethnicity,loc.ethnicity_user,
+loc.order_biz_type,
+CASE
+WHEN loc.dc_sku_flag = '1' OR loc.dc_sku_flag = 1 THEN 1
+WHEN loc.dc_sku_flag = '0' OR loc.dc_sku_flag = 0 THEN 0
+ELSE 0 -- Default to 0 for any other values
+END AS dc_sku_flag,
+loc.sku_owner,loc.weee_buyer_id,loc.weee_buyer_name,
+loc.purchase_specialist,loc.order_cnt_adjusted,loc.unaval_weighted,
+loc.suggested_order_date_available_quantity,
+pri.price,
+dc.dc_last_available_date,
+dc.invoice_id,
+dc.original_quantity as DC_to_FC_Shipped_Quantity,
+dc.receipt_quantity as DC_to_FC_Receipt_Quantity,
+dc.most_recent_internal_transfer_created_date as DC_to_FC_Shipping_Invoice_Created_Date,
+dc.estimated_pickup_date,
+dc.actual_pickup_date,
+dc.estimated_delivery_date as DC_to_FC_Est_Delivery_Date,
+dc.actual_delivery_date as DC_to_FC_Invoice_Received_Date,
+dc.status_title as DC_to_FC_Shipping_Invoice_Status,
+dc.last_available_date as fc_last_available_date,
+CASE
+WHEN dc.priority_1_dc_id = 33 THEN 16
+WHEN dc.priority_1_dc_id = 37 THEN 7
+ELSE dc.priority_1_dc_id
+END AS priority_1_dc_id,
+dc.priority_1_dc_name,
+dc.priority_1_dc_order_date,
+dc.priority_1_dc_pickup_date,dc.priority_1_dc_delivery_date,
+coalesce(dc.priority_1_sellable_qty,0) as priority_1_dc_sellable_qty,
+dc.dc_priority_1_reserve_qty,
+dc.sold_qty_last_available_date as dc_sku_fc_sold_qty_at_last_available_date,
+dc.qty_forecasted as dc_sku_fc_demand_qty_forecast_at_DC_order_date,
+       '2026-01-15'-1 - dc.last_available_date as fc_days_oos,
+dc.priority_1_dc_order_date - suppa.last_available_date as dc_days_oos,
+dc.sellable_quantity as dc_sku_sellable_quantity,
+dc.target_quantity,dc.order_quantity as dc_sku_order_quantity, dc.available_quantity as dc_sku_available_quantity,
+dc.final_planning_horizon_days as dc_sku_final_planning_horizon_days,
+dc.is_order_quantity_satisfied_by_primary_lane as dc_sku_order_quantity_satisfied_by_primary_lane,
+dc.dc_bin_qty,dc.dc_stock_qty,
+suppa.weee_buyer_name as supplier_to_DC_weeee_buyer_name,
+suppa.primary_vendor_id as supplier_to_DC_primary_vendor_id,
+suppa.primary_vendor_title as supplier_to_DC_primary_vendor_title,
+suppa.last_available_date as DC_last_available_date_before_DC_order_date,
+suppa.days_oos as supplier_to_dc_days_oos,
+suppa.most_recent_purchase_order_id as supplier_to_dc_most_recent_po_id,
+suppa.most_recent_po_date as supplier_to_dc_most_recent_po_creation_date,
+suppa.most_recent_po_delivery_date as supplier_to_dc_most_recent_po_delivery_date,
+suppa.most_recent_entire_po_receiving_date as supplier_to_dc_most_recent_entire_po_received_date,
+suppa.most_recent_po_sku_receipt_date as supplier_to_dc_sku_po_received_date,
+suppa.most_recent_po_requested_qty as supplier_to_dc_most_recent_po_requested_qty,
+suppa.most_recent_po_received_qty as supplier_to_dc_most_recent_po_received_qty,
+suppa.avg_daily_sales as supplier_to_dc_avg_daily_sales,
+suppa.avg_daily_demand_forecast as supplier_to_dc_demand_fcst,
+suppa.order_date as supplier_to_dc_order_date,
+suppa.delivery_date as supplier_to_dc_delivery_date,
+suppa.sold_dc_mapping,suppa.df_dc_mapping,
+loc.order_date,loc.delivery_date,
+--dc.priority_1_dc_review_date_1, priority_1_dc_review_date_2,
+--dc.priority_1_dc_pickup_date,
+--dc.priority_1_dc_delivery_date,
+loc.product_sale_status_title,loc.available,loc.suggested_order_date_order_quantity,loc.order_date_target_quantity,
+loc.order_date_sellable_quantity,loc.date_promotion_demand_inputted,loc.promotion_sku_status,loc.promotion_start_date,
+loc.promotion_end_date,loc.promo_lift_qty,loc.last_available_order_quantity,loc.last_available_target_quantity,
+loc.last_available_sellable_quantity,loc.pr_qty,loc.avg_daily_sales,loc.days_oos,loc.buyer_check_inventory_id,
+loc.buyer_check_product_id,loc.buyer_check_purchase_order_id,loc.buyer_check_est_delivery_date,
+loc.buyer_check_item_receipt_date,loc.buyer_check_receipt_date,loc.irs_pr_submitted_quantity,loc.irs_pr_submission_status,
+loc.irs_pr_id,loc.date_made_live,loc.avg_daily_demand_forecast,loc.most_recent_purchase_order_id,loc.most_recent_po_date,
+loc.most_recent_po_requested_qty,loc.most_recent_po_received_qty,loc.most_recent_po_delivery_date,
+loc.most_recent_entire_po_receiving_date,loc.most_recent_po_sku_receipt_date,loc.most_recent_manual_purchase_order_id,
+loc.manual_po_creation_date,loc.manual_po_est_delivery_date,loc.manual_po_receiving_date,loc.manual_item_receipt_date,
+loc.second_most_recent_purchase_order_id,loc.second_po_creation_date,loc.second_est_delivery_date,loc.po_receipt_date_second,
+loc.item_receipt_date_second,loc.record_date,loc.is_purchase,loc.secondary_vendor_id,loc.supply_chain_analyst_id,
+loc.supply_chain_analyst_name,loc.is_forward_buy,loc.outl,loc.purchase_status,loc.purchase_status_desc,
+loc.live_code,loc.dnr_code,loc.next_delivery_date,loc.assortment_role,loc.testing_period,loc.visit_week,
+loc.availability_inventory_title,loc.availability_supply_chain_analyst_id,loc.availability_purchase_specialist,loc.availability_primary_vendor,
+loc.availability_primary_vendor_title,loc.availability_available,loc.availability_tier,loc.availability_storage_type,loc.availability_dc_sku_flag,
+loc.availability_direct_import_flag,loc.availability_core_flag,loc.availability_product_sale_status,loc.availability_product_sale_status_title,
+loc.dedicated_user_id,loc.timezone,loc.split_ethnicity,loc.vendor_id,loc.order_week,loc.lead_time,loc.rn_order,loc.rn_delivery,loc.supply_mode,
+loc.connection_inventory_id,loc.connection_inventory_type,loc.last_available_date,
+CASE
+WHEN loc.purchase_method = 'D'
+and (loc.oos_reason = 'Supplier to DC Issue: DC has zero transferrable inventory')
+and dc.priority_1_dc_name is not null
+AND suppa.oos_reason IS NOT NULL THEN suppa.oos_reason
+ELSE loc.oos_reason
+END AS oos_reason
+FROM temp_updated_local_oos loc
+left join dc_fc_oos_reason_codes dc on dc.product_id = loc.product_id and dc.inventory_id = loc.inventory_id
+--LEFT JOIN supplier_dc_oos_reason_code supp
+--ON loc.product_id = supp.product_id dc_schedule_details_v6 
+--AND dc.priority_1_dc_id = supp.inventory_id
+LEFT JOIN local_to_dc_oos_reason suppa
+ON loc.product_id = suppa.product_id
+AND dc.priority_1_dc_id = suppa.inventory_id
+LEFT JOIN  dc_schedule_details_v6 sd
+ON sd.fc_id = loc.inventory_id
+AND sd.priority = 1
+and loc.purchase_method = 'D'
+AND
+(loc.storage_type = 'N' AND sd.storage_type = 'Dry') OR
+(loc.storage_type = 'R' AND sd.storage_type = 'Fresh') OR
+(loc.storage_type = 'F' AND sd.storage_type = 'Frozen')
+left join product_price pri on
+loc.product_id = pri.product_id and loc.inventory_id = pri.inventory_id and loc.visit_day = pri.visit_day
+left join mdse_product_warehouse mpw on loc.product_id = mpw.product_id and loc.inventory_id =
+CASE
+WHEN mpw.inventory_id = 33 THEN 16
+WHEN mpw.inventory_id = 37 THEN 7
+ELSE mpw.inventory_id
+END ;
+	
+
+
+insert into sandbox.finalized_oos_reason_final_v30_copy_shee select * from temp_final_oos;
+select distinct visit_day,count(*) from sandbox.finalized_oos_reason_final_v30_copy_shee group by 1 order by visit_day desc ;
+--select * from  sandbox.finalized_oos_reason_final_v30_copy_shee where inventory_id in (16,41)
+--and visit_day > '2025-08-09' and 
+--product_id in (16937,97788,76412,91308,23591) and oos_reason not in('available')
