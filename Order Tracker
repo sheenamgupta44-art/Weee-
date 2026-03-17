@@ -1,0 +1,225 @@
+WITH
+-- 1) combine product_warehouse with product_info
+product_base AS (
+  SELECT
+    pw.*,
+    p.short_title_zh,
+    p.short_title_en,
+    p.division_id,
+    p.division,
+    p.department_num,
+    p.department,
+    p.category_num,
+    p.category,
+    p.sub_category_num,
+    p.sub_category,
+    p.product_ethnicity,
+    p.storage_type,
+    p.storage_desc,
+    p.is_imported
+  FROM dwd.mdse_product_warehouse pw
+  LEFT JOIN dwd.mdse_product p
+    ON pw.product_id = p.product_id
+),
+
+-- 2) cross join calendar with products (scope: 2024-10-01 ~ current_date)
+date_products AS (
+  SELECT
+    cal.cal_date,
+    pb.*
+  FROM product_base pb
+  CROSS JOIN (
+    SELECT cal_date
+    FROM dim.calendar
+    WHERE cal_date >= current_date - {{inc_days}}
+  ) cal
+),
+
+-- 3) adding PR
+prs_basic AS (
+  SELECT
+    a.*,
+    b.vendor_id,
+    b.vendor_name,
+    b.snapshot_date,
+    b.order_quantity,
+    b.estimated_pallets AS pr_estimated_pallets,
+    b.order_date,
+    b.delivery_date,
+    b.cost,
+    b.submission_status,
+    b.submission_status_reason,
+    b.submitted_quantity,
+    b.purchase_request_id
+  FROM date_products a
+  LEFT JOIN dwd.irs_network_purchase_order_product b
+    ON a.product_id = b.product_id
+   AND a.inventory_id = b.facility_id
+   AND a.cal_date = b.order_date
+),
+
+-- 4) adding PR info
+prs_info AS (
+  SELECT
+    a.*,
+    b.connection_inventory_id,
+    b.connection_inventory_type,
+    b.vendor_id AS pr_vendor,
+    b.qty,
+    b.quantity_per_unit,
+    b.calendar_type,
+    b.eta_connection_date,
+    b.eta_final_date,
+    b.status,
+    b.source,
+    b.po_id,
+    b.rec_creator_id,
+    b.rec_create_time,
+    b.rec_update_time,
+    b.auto_proposal
+  FROM prs_basic a
+  LEFT JOIN dwd.pr_purchase_request b
+    ON a.purchase_request_id = b.id
+),
+
+-- 5) adding internal
+it_basic AS (
+  SELECT
+    a.*,
+    b.source_facility_id,
+    b.destination_facility_id,
+    b.eaches_per_case,
+    b.estimated_pallets AS internal_estimated_pallets,
+    b.estimated_pickup_date,
+    b.estimated_delivery_date,
+    b.order_cutoff_date,
+    b.order_quantity AS calculated_quantity,
+    b.submission_status AS internal_submission_status,
+    b.submission_status_reason AS internal_submission_status_reason,
+    b.submitted_quantity AS internal_submitted_quantity,
+    b.transfer_order_id
+  FROM prs_info a
+  LEFT JOIN dwd.irs_network_transfer_product b
+    ON a.cal_date = b.snapshot_date
+   AND a.product_id = b.product_id
+   AND a.inventory_id = b.destination_facility_id
+),
+
+-- 6) adding internal info
+it_info AS (
+  SELECT
+    a.*,
+    wii.markout_date,
+    wii.eta_date,
+    wii.invoice_id,
+    wii.rec_creator_id AS internal_rec_creator_id,
+    wii.rec_create_time AS internal_rec_create_time,
+    wii.rec_update_time AS internal_rec_update_time,
+    wii.out_system,
+    wii.in_system,
+    wii.is_send_email
+  FROM it_basic a
+  LEFT JOIN dwd.wms_invoice_internal wii
+    ON a.transfer_order_id = wii.id
+),
+
+-- 7) filter for non-null rows → product_activity
+product_activity AS (
+  SELECT *
+  FROM it_info
+  WHERE snapshot_date IS NOT NULL
+     OR source_facility_id IS NOT NULL
+),
+
+-- 8) join snapshot info → product_activity_with_snapshot
+product_activity_with_snapshot AS (
+  SELECT
+    a.*,
+    CASE
+      WHEN s.purchase_status = 'O' THEN 'DNR'
+      WHEN s.purchase_status = 'A' THEN 'Live'
+      WHEN s.purchase_status = 'I' THEN 'Initiated'
+    END AS snapshot_purchase_status,
+    s.assortment_role AS snapshot_assortment_role,
+    s.purchase_method AS snapshot_purchase_method
+  FROM product_activity a
+  LEFT JOIN dwd.mdse_product_warehouse_snapshot s
+    ON a.product_id = s.product_id
+   AND a.inventory_id = s.inventory_id
+   AND a.snapshot_date = s.dt
+),
+
+-- 9) final dataset equivalent to sandbox.irs_calculation_zhe
+irs_calculation_zhe AS (
+  SELECT
+    pw.product_id,
+    pw.inventory_id,
+    CASE
+      WHEN pw.inventory_id = 8  THEN 'WA - Seattle'
+      WHEN pw.inventory_id = 20 THEN 'TX - Houston'
+      WHEN pw.inventory_id = 25 THEN 'LA - La Mirada'
+      WHEN pw.inventory_id = 29 THEN 'IL - Chicago'
+      WHEN pw.inventory_id = 33 THEN 'NJ - Clifton'
+      WHEN pw.inventory_id = 35 THEN 'FL - Tampa'
+      WHEN pw.inventory_id = 37 THEN 'SF - Milpitas'
+      WHEN pw.inventory_id = 39 THEN 'LA - DC - Riverside'
+      WHEN pw.inventory_id = 40 THEN 'LA - DC - Santa Fe Springs'
+      WHEN pw.inventory_id = 41 THEN 'NJ - Belleville'
+      WHEN pw.inventory_id = 101 THEN 'Weee-Reserve-32 Cold'
+      WHEN pw.inventory_id = 102 THEN 'Weee-Reserve-United cold'
+      WHEN pw.inventory_id = 103 THEN 'Weee-Reserve-FBM'
+      WHEN pw.inventory_id = 104 THEN 'Weee-Reserve-Ready Trucking INC'
+      WHEN pw.inventory_id = 105 THEN 'Weee-Reserve-Lineage'
+      WHEN pw.inventory_id = 106 THEN 'Weee-Reserve-Americold'
+      WHEN pw.inventory_id = 10 THEN 'SF - Volpey'
+      ELSE 'Unknown'
+    END AS inventory_title,
+    pw.dt AS snapshot_date,
+    CASE
+      WHEN pw.purchase_status = 'O' THEN 'DNR'
+      WHEN pw.purchase_status = 'A' THEN 'Live'
+      WHEN pw.purchase_status = 'I' THEN 'Initiated'
+    END AS purchase_status,
+    pw.assortment_role,
+    pw.purchase_method AS pw_purchase_method,
+    pp.division,
+    zz.collection_id,
+    zz.calculation_id,
+    zz.calculation_timestamp,
+    zz.facility_name,
+    zz.product_eng_title,
+    zz.storage_type,
+    zz.tier,
+    zz.ethnicity,
+    zz.purchase_status AS zz_purchase_status,
+    zz.purchase_method AS zz_purchase_method,
+    zz.initial_planning_horizon_days,
+    zz.final_planning_horizon_days,
+    zz.aggregated_cycle_stock,
+    zz.aggregated_safety_stock,
+    zz.shelf_life_days,
+    zz.shelf_life_receiving_limit_days,
+    zz.shelf_life_outbound_limit_days,
+    zz.avg_til_weeks_of_supply,
+    zz.avg_daily_demand_forecast,
+    zz.avg_daily_sales,
+    zz.target_quantity,
+    zz.order_quantity,
+    zz.available_quantity,
+    zz.sellable_quantity,
+    zz.open_total_transfer_product_quantity,
+    zz.open_total_purchase_order_product_quantity,
+    zz.is_planning_horizon_extended,
+    zz.is_order_quantity_satisfied_by_primary_lane
+  FROM dwd.mdse_product_warehouse_snapshot pw
+  LEFT JOIN dwd.irs_network_product_calculation zz
+    ON pw.product_id = zz.product_id
+   AND pw.inventory_id = zz.facility_id
+   AND pw.dt = zz.snapshot_date
+  LEFT JOIN dwd.mdse_product pp
+    ON pw.product_id = pp.product_id
+)
+
+-- Final output (no table creation; just a SELECT)
+SELECT *
+FROM irs_calculation_zhe;
